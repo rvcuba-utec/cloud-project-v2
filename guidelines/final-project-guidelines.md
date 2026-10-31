@@ -57,12 +57,7 @@ Elegir el tipo de SaaS según Grupo Canvas: `Cloud Computing (CS2032) > Personas
 
 | Grupo | Tipo de SaaS | Descripción | Ejemplos |
 |---|---|---|---|
-| 1 | CRM | **Customer Relationship Management.** Gestiona clientes, oportunidades comerciales, ventas y relaciones comerciales. | salesforce.com / zoho.com/es-xl/crm / odoo.com/es/app/crm |
-| 2 | HCM | **Human Capital Management.** Gestiona empleados, nóminas, talento, contratación y desempeño. | sap.com/products/hcm.html / bamboohr.com / workday.com |
-| 3 | LMS | **Learning Management System.** Administra cursos, contenidos educativos, evaluaciones y seguimiento de estudiantes. | instructure.com/canvas / moodlecloud.com / talentlms.com |
-| 4 | PPM | **Project Portfolio Management.** Gestiona proyectos, portafolios, recursos, presupuestos y prioridades. | monday.com / es.smartsheet.com / planview.com |
 | 5 | FSM | **Field Service Management.** Coordina técnicos, visitas, órdenes de trabajo y servicios en campo. | salesforce.com/service/field-service-management / servicetitan.com / getjobber.com |
-| 6 | ITSM | **IT Service Management.** Gestión de incidentes, problemas, cambios y solicitudes de servicios TI. | servicenow.com/products/itsm.html / atlassian.com/software/jira/service-management / freshworks.com/freshservice |
 
 ### Requerimientos Técnicos
 
