@@ -191,7 +191,7 @@ En la primera versión, el administrador puede cubrir también tareas de coordin
 7. Consultar las visitas del técnico e iniciar una atención.
 8. Registrar diagnóstico, tareas y resultado.
 9. Subir y consultar evidencias en S3.
-10. Actualizar Agenda y Órdenes mediante SNS y SQS.
+10. Actualizar Agenda, Órdenes y Analítica mediante SNS y SQS.
 11. Solicitar una segunda visita cuando el trabajo siga pendiente.
 12. Revisar y cerrar la orden cuando se cumplan las condiciones.
 13. Mostrar un panel con conteos, próximas atenciones y métricas de analítica por tenant y por técnico.
@@ -262,7 +262,7 @@ Si Carlos necesita un repuesto, PAR-001 indica `REQUIERE_REVISITA`. Se agenda VI
 ```mermaid
 flowchart TD
     U["Usuarios en computadora o celular"] --> WEB["React en Amplify Hosting"]
-    WEB --> API["API Gateway y autorizador Lambda"]
+    WEB --> API["API Gateway (una API por microservicio) y autorizador Lambda"]
     WEB --> UAPI["MS0 Usuarios: registro administrado y login"]
     UAPI --> DU[("DynamoDB Usuarios y sesiones")]
     API -. "Valida token y contexto" .-> UAPI
@@ -287,6 +287,8 @@ flowchart TD
 
 **Las flechas hacia DynamoDB indican propiedad de los datos.** MS0 conserva sus cuentas y sesiones; cada microservicio de negocio conserva sus propios datos. Por ejemplo, Agenda modifica su tabla de visitas y reservas. Para provocar un cambio en una orden, se comunica con el servicio de Órdenes. Analítica solo guarda métricas derivadas de los eventos; no es fuente de verdad del negocio.
 
+**El nodo «API Gateway» agrupa siete APIs**, una por microservicio, cada una desplegada con el `serverless.yml` de su servicio. Las APIs de MS1–MS6 usan el autorizador Lambda de MS0. En MS0, `POST /auth/login` es público y sus demás rutas validan el token dentro del propio servicio con la misma lógica, porque MS0 no se llama a sí mismo para autorizarse. El detalle de recursos AWS (APIs, Lambdas, tablas, colas, bucket y permisos) está en [aws-architecture.md](aws-architecture.md).
+
 La vista omite las conexiones entre servicios, los archivos y los eventos para mantenerla legible. Se explican en las siguientes secciones.
 
 ### 6.2. Papel de cada tecnología
@@ -303,6 +305,8 @@ La vista omite las conexiones entre servicios, los archivos y los eventos para m
 | SQS | Colas de mensajes por consumidor. | Mantiene pendientes hasta que se procesen. |
 | DynamoDB Streams | Disparar la publicación de cambios persistidos. | Detecta que hay un aviso nuevo por enviar. |
 | CloudWatch | Registros y métricas de operación. | Ayuda a comprobar qué pasó cuando algo falla. |
+| IAM | Roles de ejecución de las Lambdas. | Define a qué tablas, colas y objetos accede cada función. |
+| EC2 (MV de carga) | Ejecutar el script de carga masiva. | Máquina temporal desde la que Python/boto3 escribe en DynamoDB; no forma parte de la aplicación en ejecución. |
 | Serverless Framework | Desplegar la infraestructura declarada. | Crea y actualiza los recursos a partir de configuración versionada. |
 
 Amplify admite React y despliegue vinculado con Git. [F5] S3 se utilizará para objetos, mientras que los metadatos de cada archivo pertenecerán al servicio de Partes. [F6]
@@ -551,23 +555,30 @@ Las rutas son contratos propuestos, no endpoints ya desplegados. Los nombres de 
 | Clientes | `POST /clientes` | Registrar cliente. |
 | Clientes | `GET /clientes` | Listar y buscar con paginación. |
 | Clientes | `GET /clientes/{cliente_id}` | Consultar detalle. |
+| Clientes | `PATCH /clientes/{cliente_id}` | Actualizar datos o desactivar. |
 | Clientes | `POST /clientes/{cliente_id}/ubicaciones` | Agregar ubicación. |
+| Clientes | `GET /clientes/{cliente_id}/ubicaciones/{ubicacion_id}` | Consultar una ubicación; también la usa Órdenes para validar la referencia. |
 | Técnicos | `POST /tecnicos` | Registrar técnico. |
 | Técnicos | `GET /tecnicos` | Listar personal. |
+| Técnicos | `GET /tecnicos/{tecnico_id}` | Consultar perfil y especialidades. |
+| Técnicos | `PATCH /tecnicos/{tecnico_id}` | Activar o desactivar y actualizar especialidades. |
 | Técnicos | `PUT /tecnicos/{tecnico_id}/jornadas/{fecha}` | Definir jornada. |
-| Técnicos | `GET /tecnicos/{tecnico_id}/jornadas` | Consultar rango de trabajo. |
+| Técnicos | `PUT /tecnicos/{tecnico_id}/ausencias/{fecha}` | Registrar una ausencia. |
+| Técnicos | `GET /tecnicos/{tecnico_id}/jornadas` | Consultar rango de trabajo, con sus ausencias. |
 | Órdenes | `POST /ordenes` | Crear orden. |
 | Órdenes | `GET /ordenes` | Consultar por estado y otros filtros permitidos. |
 | Órdenes | `GET /ordenes/{orden_id}` | Consultar detalle. |
+| Órdenes | `PATCH /ordenes/{orden_id}` | Cambiar prioridad. |
 | Órdenes | `POST /ordenes/{orden_id}/cerrar` | Solicitar cierre. |
 | Órdenes | `POST /ordenes/{orden_id}/cancelar` | Cancelar bajo las reglas del MVP. |
-| Agenda | `GET /disponibilidad` | Consultar opciones por técnico y fecha. |
+| Agenda | `GET /disponibilidad` | Consultar opciones por técnico y fecha. Con `sugerir=true` devuelve los candidatos ordenados, con la justificación obtenida de Analítica. |
 | Agenda | `POST /visitas` | Programar visita. |
 | Agenda | `GET /visitas` | Listar agenda con filtros y paginación. |
 | Agenda | `POST /visitas/{visita_id}/reprogramar` | Cambiar horario o técnico. |
 | Agenda | `POST /visitas/{visita_id}/iniciar` | Iniciar atención. |
 | Agenda | `POST /visitas/{visita_id}/cancelar` | Cancelar visita pendiente. |
 | Partes | `POST /visitas/{visita_id}/partes` | Crear borrador. |
+| Partes | `PUT /partes/{parte_id}` | Editar el borrador mientras no esté finalizado. |
 | Partes | `POST /partes/{parte_id}/evidencias` | Solicitar una carga autorizada. |
 | Partes | `POST /evidencias/{evidencia_id}/confirmar` | Confirmar archivo cargado. |
 | Partes | `POST /partes/{parte_id}/finalizar` | Finalizar parte y generar evento. |
@@ -576,7 +587,18 @@ Las rutas son contratos propuestos, no endpoints ya desplegados. Los nombres de 
 | Analítica | `GET /analitica/tecnicos` | Ranking de técnicos por carga y rendimiento del tenant. |
 | Analítica | `GET /analitica/dashboard` | Métricas agregadas del tenant: órdenes por estado, tendencias, tiempos. |
 
-Además existirán operaciones internas, por ejemplo bloquear la agenda de una orden. No se expondrán como acciones generales para cualquier usuario.
+Las llamadas entre servicios (sección 8.1) usan estas rutas, más una operación interna de bloqueo que no se ofrece al frontend:
+
+| Origen → destino | Ruta | Uso |
+|---|---|---|
+| Órdenes → Clientes | `GET /clientes/{cliente_id}/ubicaciones/{ubicacion_id}` | Validar cliente y ubicación del tenant. |
+| Agenda → Órdenes | `GET /ordenes/{orden_id}` | Verificar la orden y su situación. |
+| Agenda → Técnicos | `GET /tecnicos/{tecnico_id}`, `GET /tecnicos/{tecnico_id}/jornadas` | Validar especialidad, jornada y ausencia. |
+| Agenda → Analítica | `GET /analitica/tecnicos/{tecnico_id}` | Carga del día y tasa de resolución para sugerir técnico. |
+| Partes → Agenda | `GET /visitas/{visita_id}` | Verificar visita, técnico y estado. |
+| Órdenes → Agenda | `POST /control-ordenes/{orden_id}/bloqueo` (interna, con ID de operación) | Bloquear nuevas programaciones antes de cerrar o cancelar; idempotente. |
+
+La ruta de bloqueo solo acepta llamadas de Órdenes, y el detalle de su contrato se fija al implementar.
 
 Las rutas de creación aceptarán un identificador de solicitud. Si se repite la misma operación por doble clic o reintento, el backend podrá devolver el resultado ya creado. Los errores distinguirán entrada inválida, falta de acceso, recurso inexistente y conflicto de estado u horario.
 
@@ -584,7 +606,7 @@ Las rutas de creación aceptarán un identificador de solicitud. Si se repite la
 
 ### 9.1. Decisión de autenticación revisada según el docente
 
-La arquitectura conserva **API Gateway + autorizador Lambda**, pero añade **MS0 Usuarios y acceso**. El profesor explicó que los usuarios deben manejarse como un microservicio multitenant [F16]. El Taller Serverless 1 implementa alta de usuario, login, tokens con expiración y acceso protegido, y advierte que **Cognito no está disponible en el entorno AWS Academy empleado en ese taller** [F17].
+La arquitectura conserva **API Gateway + autorizador Lambda** [F8], pero añade **MS0 Usuarios y acceso**. El profesor explicó que los usuarios deben manejarse como un microservicio multitenant [F16]. El Taller Serverless 1 implementa alta de usuario, login, tokens con expiración y acceso protegido, y advierte que **Cognito no está disponible en el entorno AWS Academy empleado en ese taller** [F17].
 
 **Diseño propuesto para el entorno académico:** implementar MS0 con Python, Lambda y DynamoDB, adaptando el ejemplo del taller. El login valida credenciales de un usuario perteneciente a una empresa determinada. El autorizador comprueba el token y obtiene un contexto confiable `usuario_id + tenant_id + rol`, que las APIs utilizan para filtrar y autorizar. El mecanismo concreto del token (opaco con sesión en DynamoDB o firmado y verificable) se fija antes de programar; no se aceptan tokens de ejemplo sin validación real. Al desplegar, se emplearán hashing adecuado de contraseñas, expiración, permisos de administración y registros sin datos sensibles.
 
@@ -617,7 +639,7 @@ flowchart TD
 6. Las credenciales de AWS nunca se entregan al navegador.
 7. Los archivos de S3 son privados y requieren autorización para emitir enlaces temporales.
 8. Los eventos incluyen el tenant y solo pueden ser publicados por componentes autorizados.
-9. Cada rol Lambda recibe acceso a las tablas, colas, tema y objetos que necesita.
+9. Cada rol Lambda recibe acceso a las tablas, colas, tema y objetos que necesita. **Verificar al inicio** si AWS Academy permite crear roles por función; si el laboratorio solo ofrece un rol preexistente (`LabRole`), todas las Lambdas lo compartirán y el aislamiento entre servicios dependerá del código y de la separación de tablas, no de IAM. Se documentará cuál de los dos casos aplica.
 
 **Prueba esencial:** entrar como FríoSur e intentar consultar una orden de ClimaLima, incluso alterando manualmente el identificador. El backend debe rechazarla. Cambiar lo visible en una pantalla no constituye por sí solo aislamiento.
 
@@ -728,6 +750,20 @@ Las fechas de instantes se almacenarán en UTC. La interfaz mostrará horarios c
   ]
 }
 ```
+
+```json
+{
+  "PK": "TENANT#CLIMALIMA",
+  "SK": "AUSENCIA#TEC-001#2026-11-12",
+  "entity_type": "AUSENCIA",
+  "tenant_id": "CLIMALIMA",
+  "tecnico_id": "TEC-001",
+  "fecha": "2026-11-12",
+  "motivo": "Descanso médico"
+}
+```
+
+Una ausencia cubre el día completo de esa fecha. Jornadas y ausencias se consultan por rango de fechas con dos consultas sobre el mismo `PK`, una por cada prefijo de `SK`; `GET .../jornadas` las combina en una sola respuesta.
 
 **Consultas necesarias:** técnicos activos; perfil y especialidades; jornadas y ausencias de un técnico en un rango de fechas.
 
@@ -898,7 +934,7 @@ Cada responsable debe documentar las consultas de su servicio antes de cerrar la
 
 Las listas se consultan por páginas. Una pantalla no debe intentar descargar los 30 000 registros al abrirse.
 
-Los registros de analítica son de solo lectura desde el frontend. MS4 los consulta internamente sin exponerlos al navegador directamente.
+Los registros de analítica son de solo lectura desde el frontend: el navegador solo consulta el dashboard y el ranking, y no puede escribirlos. MS4 también los consulta internamente para sugerir técnico. Las rutas de Analítica solo admiten los roles administrador y coordinador.
 
 Los índices sirven para encontrar registros. Las condiciones críticas de reserva, cierre o versión se verifican contra los registros de control y las escrituras condicionadas, no únicamente contra una lista que se mostró antes al usuario.
 
@@ -1239,6 +1275,12 @@ El estado general debe derivarse de las visitas y resultados vigentes. Un evento
 
 Las versiones de una visita y de un parte son independientes. No se comparan entre sí como si fueran un único contador global.
 
+**Datos adicionales que necesita Analítica** (se incluyen en `data` de cada evento, no se consultan a otros servicios):
+
+- `VisitaProgramada` y `VisitaReprogramada`: `tecnico_id`, fecha del horario, y en la reprogramación también el técnico y la fecha anteriores; además `numero_visita_orden`, para identificar revisitas.
+- `VisitaCompletada`: `resultado`, `numero_visita_orden` y duración real de la atención.
+- `OrdenCerrada`: `creada_en`, para calcular el tiempo promedio de cierre.
+
 ### 12.3. Tres colas para tres consumidores
 
 Se propone un tema SNS de eventos FSM y tres colas, una por consumidor:
@@ -1249,7 +1291,7 @@ Se propone un tema SNS de eventos FSM y tres colas, una por consumidor:
 | Cola de Órdenes | Eventos de Agenda y ParteFinalizado. | Lambda del servicio Órdenes. |
 | Cola de Analítica | Eventos de visita (programada, reprogramada, cancelada, completada), ParteFinalizado y eventos de orden (creada, cerrada, cancelada). | Lambda del servicio Analítica. |
 
-Las suscripciones filtran por tipo de evento. Cada cola tiene su propia configuración de reintentos y una cola de errores.
+Las suscripciones filtran por tipo de evento; para ello, cada publicadora incluye `event_type` como atributo del mensaje SNS. Cada cola tiene su propia configuración de reintentos y una cola de errores.
 
 Si dos funciones compiten por una sola cola, no se obtiene automáticamente una copia para cada área. Por eso se utilizan colas separadas para los consumidores que necesitan procesar el mismo hecho.
 
@@ -1259,7 +1301,7 @@ Analítica solo consume: sus fallos o retrasos no afectan a Agenda ni a Órdenes
 
 Guardar un parte y luego llamar a SNS son dos acciones diferentes. Para recuperar una falla entre ambas, el servicio guarda el cambio de negocio y un registro `OUTBOX` en una transacción de su propia base.
 
-Ese registro conserva el evento pendiente. Una Lambda asociada a DynamoDB Streams publica los nuevos registros `OUTBOX` en SNS y marca su publicación. Streams permite activar funciones a partir de cambios en DynamoDB. [F12]
+Ese registro conserva el evento pendiente. Tienen publicadora los tres servicios que producen eventos: Órdenes, Agenda y Partes. Una Lambda asociada a DynamoDB Streams publica los nuevos registros `OUTBOX` en SNS y marca su publicación. Streams permite activar funciones a partir de cambios en DynamoDB. [F12]
 
 **Controles del publicador:**
 
@@ -1397,7 +1439,7 @@ El calendario visual puede comenzar como una lista por fecha y técnico. Lo indi
 | `backend/usuarios/` | Registro administrado, login, tokens, autorizador y persistencia del MS0. |
 | `backend/clientes/` | Funciones, validaciones y datos del MS1. |
 | `backend/tecnicos/` | Funciones, validaciones y datos del MS2. |
-| `backend/ordenes/` | API, consumidor y lógica del MS3. |
+| `backend/ordenes/` | API, consumidor, publicador y lógica del MS3. |
 | `backend/agenda/` | Reservas, visitas, consumidor y publicador del MS4. |
 | `backend/partes/` | Atención, evidencias y publicador del MS5. |
 | `backend/analitica/` | Consumidor de eventos, agregación de métricas y API de consulta del MS6. |
@@ -1565,8 +1607,8 @@ Se recomienda automatizar los casos con riesgo de duplicación, concurrencia o a
 7. Abrir el **dashboard de analítica** y mostrar las métricas del tenant actuales.
 8. Entrar como técnico en otra pestaña, iniciar la visita y registrar el diagnóstico.
 9. Subir una foto y comprobar que puede consultarse.
-10. Finalizar el parte — mientras la pestaña del técnico confirma, la pestaña del coordinador muestra la orden actualizándose sola por eventos.
-11. Volver al coordinador, cerrar la orden; el dashboard de analítica refleja el cambio inmediatamente.
+10. Finalizar el parte — mientras la pestaña del técnico confirma, la pestaña del coordinador consulta periódicamente el estado y muestra la orden actualizándose a medida que se procesan los eventos.
+11. Volver al coordinador, cerrar la orden; el dashboard de analítica refleja el cambio en cuanto Analítica procesa el evento (unos segundos).
 12. Entrar con una cuenta **independiente** de FríoSur y mostrar sus usuarios, datos y métricas completamente distintos.
 13. Mostrar el rechazo de acceso a un usuario y una orden de ClimaLima usando sesión de FríoSur.
 14. Presentar conteos de tres tenants, el script directo Python/boto3 y configuración de despliegue.
