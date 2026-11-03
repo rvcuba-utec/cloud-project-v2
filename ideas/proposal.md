@@ -1,29 +1,39 @@
 # Trazora FSM
 
-## Propuesta y plan de implementación — Grupo 5
+## Propuesta final y plan de implementación — Grupo 5
 
 **Curso:** CS2032 — Cloud Computing, ciclo 2026-2  
 **Tipo de proyecto:** Field Service Management, como Software as a Service en AWS  
-**Fecha de la propuesta inicial:** 27 de octubre de 2026  
-**Actualización:** 29 de octubre de 2026 — versión 2.0, revisada con la transcripción de indicaciones docentes  
-**Rubro propuesto:** instalación, reparación y mantenimiento de aire acondicionado  
+**Versión:** propuesta final — 3 de noviembre de 2026  
+**Rubro:** instalación, reparación y mantenimiento de aire acondicionado  
 **Nombre provisional:** Trazora FSM  
 **Concepto del nombre:** combina *trazabilidad* y *operación*. Lema propuesto: **«Cada visita bajo control»**. Es una propuesta creativa; la disponibilidad comercial del nombre no ha sido verificada.
 
 > **Idea central:** construir una aplicación que permita a varias empresas de servicio técnico organizar a sus clientes, su personal, sus órdenes de trabajo, sus visitas y las evidencias de cada atención. Cada empresa utiliza la misma plataforma, con acceso únicamente a la información que le corresponde.
 
-Este documento es una propuesta para implementar. Los requisitos académicos se identifican como **obligatorios según el enunciado**; las decisiones de producto y arquitectura se presentan como **diseño propuesto**. Las fechas internas son metas del equipo, mientras que los plazos oficiales se identifican expresamente.
+Este documento es la propuesta final para implementar. Los requisitos académicos se identifican como **obligatorios según el enunciado**; las decisiones de producto y arquitectura se presentan como **diseño propuesto**. Las fechas internas son metas del equipo, mientras que los plazos oficiales se identifican expresamente.
 
-### Cambios de la versión 2.0 — ajuste a la explicación del profesor
+### Resumen de la propuesta
 
-Esta actualización contrasta el plan anterior con la transcripción **«Proyecto final audio desde 46m»** [F16]. Se mantiene el alcance FSM, pero se realizan cuatro ajustes:
+La solución se compone de **siete microservicios serverless**, cada uno con su propia persistencia en DynamoDB:
 
-1. **MS0 Usuarios y acceso (nuevo):** administración de usuarios separada por tenant, con su propia persistencia; se mantienen los cinco servicios de negocio, de modo que el diseño tiene **seis microservicios**. El docente pidió explícitamente un microservicio de usuarios multitenant.
-2. **Carga de datos:** los registros se preparan con **Python y boto3 desde una máquina virtual directamente hacia DynamoDB**, no mediante peticiones masivas a API Gateway/Lambda.
-3. **Volumen del MS0:** el discurso dice «30 000 registros por cada microservicio» sin aclarar una excepción para Usuarios. Se documenta la **duda pendiente** y una estrategia contingente que no crea cuentas de acceso activas en masa.
-4. **Identidad en AWS Academy:** se prioriza un mecanismo compatible con los recursos efectivos del laboratorio (modelo de tokens visto en clase), en vez de depender de Cognito, señalado como no disponible en el Taller Serverless 1 [F17].
+| Microservicio | Rol |
+|---|---|
+| **MS0** Usuarios y acceso | Usuarios, login y autorización por tenant. Solicitado expresamente por el docente [F16]. |
+| **MS1** Clientes | Clientes y ubicaciones. |
+| **MS2** Técnicos | Personal, especialidades y jornadas. |
+| **MS3** Órdenes | Órdenes de trabajo y su estado general. |
+| **MS4** Agenda | Visitas, reservas y sugerencia de técnico. |
+| **MS5** Partes | Partes de trabajo y evidencias en S3. |
+| **MS6** Analítica | Métricas por técnico y tenant; alimenta la asignación inteligente y el dashboard. |
 
-**No se modifican:** el rubro, los tres tenants, los estados de orden y visita, los cinco módulos de negocio, los eventos previstos, la rúbrica ni los hitos académicos.
+Decisiones principales, contrastadas con la transcripción **«Proyecto final audio desde 46m»** [F16]:
+
+1. **Usuarios como microservicio multitenant (MS0):** cada empresa tiene sus propias cuentas, con persistencia propia.
+2. **Analítica y enrutamiento inteligente (MS6):** consume los eventos del negocio y construye métricas por técnico y por tenant. MS4 las usa para sugerir al técnico más adecuado, con justificación visible. Si MS6 falla, el resto del sistema sigue operando.
+3. **Carga de datos:** los registros se generan con **Python y boto3 desde una máquina virtual directamente hacia DynamoDB**, no mediante peticiones masivas a API Gateway/Lambda.
+4. **Volumen del MS0:** el discurso dice «30 000 registros por cada microservicio» sin aclarar una excepción para Usuarios. Se documenta la **duda pendiente** y una estrategia contingente que no crea cuentas de acceso activas en masa.
+5. **Identidad en AWS Academy:** se prioriza un mecanismo compatible con los recursos efectivos del laboratorio (modelo de tokens visto en clase), en vez de depender de Cognito, señalado como no disponible en el Taller Serverless 1 [F17].
 
 Los diagramas están escritos en **Mermaid**, dentro del propio Markdown. Se pueden visualizar en GitHub o en un lector/editor que admita Mermaid. Cada diagrama explica una parte de la solución; las vistas se complementan.
 
@@ -37,7 +47,7 @@ Los diagramas están escritos en **Mermaid**, dentro del propio Markdown. Se pue
 4. [Alcance de la primera versión](#4-alcance-de-la-primera-versión)
 5. [Recorrido completo de una atención](#5-recorrido-completo-de-una-atención)
 6. [Arquitectura general en AWS](#6-arquitectura-general-en-aws)
-7. [Los seis microservicios](#7-los-seis-microservicios)
+7. [Los siete microservicios](#7-los-siete-microservicios)
 8. [Conexiones y contratos entre componentes](#8-conexiones-y-contratos-entre-componentes)
 9. [Identidad, permisos y separación entre empresas](#9-identidad-permisos-y-separación-entre-empresas)
 10. [Diseño inicial de los datos](#10-diseño-inicial-de-los-datos)
@@ -92,7 +102,7 @@ No se plantea una integración con las APIs de esas plataformas: la propuesta co
 
 ## 2. Requisitos del curso y cómo se demostrarán
 
-La referencia académica del plan anterior es el PDF **“2. Proyecto Final (Entrega Semana 15) V5.00 (1)”**, especialmente sus páginas 5, 6, 7 y 9. [F1] Para esta versión se añade la **transcripción de la explicación oral del docente** [F16], que especifica el microservicio de usuarios y la carga directa con boto3.
+La referencia académica es el PDF **“2. Proyecto Final (Entrega Semana 15) V5.00 (1)”**, especialmente sus páginas 5, 6, 7 y 9. [F1] Se complementa con la **transcripción de la explicación oral del docente** [F16], que especifica el microservicio de usuarios y la carga directa con boto3.
 
 | Requisito obligatorio | Implementación propuesta | Evidencia de cumplimiento |
 |---|---|---|
@@ -104,7 +114,7 @@ La referencia académica del plan anterior es el PDF **“2. Proyecto Final (Ent
 | Mínimo cinco microservicios protegidos | **Siete:** Usuarios y acceso (MS0), Clientes, Técnicos, Órdenes, Agenda, Partes y Analítica (MS1–MS6). | Responsabilidades, rutas, código, tablas y permisos separados. |
 | **Microservicio de usuarios multitenant (aclaración oral del profesor)** | MS0 con administración de usuarios y sesiones por empresa. | Acceso correcto por tenant, perfiles separados y prueba de intento de acceso cruzado. |
 | Persistencia propia por servicio | Tabla o conjunto de tablas exclusivo de cada microservicio. | Relación servicio-tabla y permisos de acceso. |
-| NoSQL con DynamoDB | Los seis servicios utilizarán DynamoDB, con persistencia exclusiva por servicio. | Tablas, claves e índices definidos. |
+| NoSQL con DynamoDB | Los siete servicios utilizarán DynamoDB, con persistencia exclusiva por servicio. | Tablas, claves e índices definidos. |
 | Diseño de datos por servicio | Estructuras JSON y explicación de sus consultas. | Sección de datos del informe. |
 | Mínimo 30 000 registros por microservicio, repartidos en tres tenants | Generador reproducible Python/boto3 con inserción directa; **pendiente definir expresamente si MS0 Usuarios también se incluye**. | Reporte de conteos por servicio y tenant; evidencia de carga sin API REST. |
 | Uso de S3 | Fotos y documentos de atención. | Carga y consulta de una evidencia desde la aplicación. |
@@ -117,7 +127,7 @@ La referencia académica del plan anterior es el PDF **“2. Proyecto Final (Ent
 
 **Dos requisitos distintos:** deben existir datos para **tres tenants**, aunque la demo se ejecute con **dos**. [F16] El docente también indicó que cada tenant debe tener sus **propios usuarios**, no solo sus propios registros de negocio.
 
-**Duda abierta:** la transcripción no exonera al nuevo servicio de Usuarios del volumen de 30 000 registros. Se solicitará confirmación antes de comprometer la cifra del MS0. [F16]
+**Duda abierta:** la transcripción no exonera al servicio de Usuarios del volumen de 30 000 registros. Se solicitará confirmación antes de comprometer la cifra del MS0. [F16]
 
 El enunciado permite SQL bajo una condición específica: un único RDS y el patrón **Single Database, Multiple Schemas**. Esta propuesta elige DynamoDB, por lo que no necesita incorporar RDS. [F1]
 
@@ -164,6 +174,7 @@ Las tres empresas son ficticias. Sus nombres e identificadores se utilizan para 
 | Iniciar una visita asignada | Según permiso | Según permiso | Sí |
 | Registrar un parte y sus evidencias | Según permiso | Según permiso | Sí, en sus visitas |
 | Revisar y cerrar una orden | Sí | Sí | No |
+| Consultar el dashboard y el rendimiento de técnicos | Sí | Sí | No |
 
 En la primera versión, el administrador puede cubrir también tareas de coordinación. Cada permiso se valida en el backend.
 
@@ -175,7 +186,7 @@ En la primera versión, el administrador puede cubrir también tareas de coordin
 2. Registrar y consultar clientes y ubicaciones.
 3. Registrar técnicos, especialidades, jornadas y ausencias.
 4. Crear órdenes con servicio, descripción, prioridad y estado.
-5. Consultar disponibilidad y asignar un técnico a una visita.
+5. Consultar disponibilidad y asignar un técnico a una visita, con una sugerencia automática basada en carga y rendimiento histórico.
 6. Reprogramar o cancelar visitas pendientes.
 7. Consultar las visitas del técnico e iniciar una atención.
 8. Registrar diagnóstico, tareas y resultado.
@@ -183,7 +194,7 @@ En la primera versión, el administrador puede cubrir también tareas de coordin
 10. Actualizar Agenda y Órdenes mediante SNS y SQS.
 11. Solicitar una segunda visita cuando el trabajo siga pendiente.
 12. Revisar y cerrar la orden cuando se cumplan las condiciones.
-13. Mostrar un panel con conteos y próximas atenciones.
+13. Mostrar un panel con conteos, próximas atenciones y métricas de analítica por tenant y por técnico.
 14. Generar datos ficticios y evidenciar su distribución.
 
 ### 4.2. Restricciones propuestas para mantener el proyecto realizable
@@ -197,7 +208,7 @@ En la primera versión, el administrador puede cubrir también tareas de coordin
 | Conectividad | Operación con internet. | La sincronización sin conexión se deja para otra versión. |
 | Parte final | Un parte final por visita. | Evita duplicar resultados; las correcciones se gestionan como revisiones. |
 | Cierre de orden | Confirmación del coordinador después de verificar las visitas. | Una atención terminada puede requerir seguimiento. |
-| Tipos de servicio | Catálogo inicial de instalación, mantenimiento y reparación. | Evita agregar un servicio de catálogo independiente; el sexto microservicio es Usuarios. |
+| Tipos de servicio | Catálogo inicial de instalación, mantenimiento y reparación. | Evita agregar un servicio de catálogo independiente; los siete microservicios son los descritos en la sección 7. |
 
 Estas reglas son decisiones del equipo, no condiciones adicionales escritas por el profesor.
 
@@ -261,17 +272,20 @@ flowchart TD
     API --> O["MS3 Órdenes"]
     API --> A["MS4 Agenda"]
     API --> P["MS5 Partes"]
+    API --> AN["MS6 Analítica"]
+    A -. "Consulta métricas para sugerir técnico" .-> AN
 
     C --> DC[("DynamoDB Clientes")]
     T --> DT[("DynamoDB Técnicos")]
     O --> DO[("DynamoDB Órdenes")]
     A --> DA[("DynamoDB Agenda")]
     P --> DP[("DynamoDB Partes")]
+    AN --> DAN[("DynamoDB Analítica")]
 ```
 
 **Cada caja MS representa funciones Lambda de un microservicio**, no un servidor que deban mantener encendido. Un microservicio puede tener varias Lambdas para sus diferentes operaciones. Lambda administra la infraestructura de ejecución. [F4]
 
-**Las flechas hacia DynamoDB indican propiedad de los datos.** MS0 conserva sus cuentas y sesiones; cada microservicio de negocio conserva sus propios datos. Por ejemplo, Agenda modifica su tabla de visitas y reservas. Para provocar un cambio en una orden, se comunica con el servicio de Órdenes.
+**Las flechas hacia DynamoDB indican propiedad de los datos.** MS0 conserva sus cuentas y sesiones; cada microservicio de negocio conserva sus propios datos. Por ejemplo, Agenda modifica su tabla de visitas y reservas. Para provocar un cambio en una orden, se comunica con el servicio de Órdenes. Analítica solo guarda métricas derivadas de los eventos; no es fuente de verdad del negocio.
 
 La vista omite las conexiones entre servicios, los archivos y los eventos para mantenerla legible. Se explican en las siguientes secciones.
 
@@ -307,21 +321,27 @@ flowchart TD
     PUB --> SNS["SNS: eventos FSM"]
     SNS --> QA["SQS de Agenda"]
     SNS --> QO["SQS de Órdenes"]
+    SNS --> QN["SQS de Analítica"]
     QA --> CA["Consumidor de Agenda"]
     QO --> CO["Consumidor de Órdenes"]
+    QN --> CN["Consumidor de Analítica"]
     CA --> DA[("Visita actualizada")]
     CO --> DO[("Actividad de la orden actualizada")]
+    CN --> DN[("Métricas de técnico y tenant actualizadas")]
+    CA -. "VisitaCompletada vía su publicadora" .-> SNS
 ```
 
-**Qué sucede aquí:** Partes deja registrado el resultado y que debe emitir un aviso. La publicadora envía el evento a SNS. Agenda y Órdenes reciben una copia mediante sus propias colas.
+**Qué sucede aquí:** Partes deja registrado el resultado y que debe emitir un aviso. La publicadora envía el evento a SNS. Agenda, Órdenes y Analítica reciben una copia mediante sus propias colas.
 
-Agenda confirma la terminación de la visita y posteriormente publica `VisitaCompletada`, que también recibe Órdenes. Esta confirmación permite distinguir “se registró un informe” de “Agenda ya aplicó el cambio”.
+Agenda confirma la terminación de la visita y posteriormente publica `VisitaCompletada`, que también reciben Órdenes y Analítica. Esta confirmación permite distinguir “se registró un informe” de “Agenda ya aplicó el cambio”. Agenda, Órdenes y Partes publican sus eventos con el mismo patrón de registro pendiente y publicadora; el diagrama muestra solo el recorrido del parte para mantenerlo legible.
 
 La combinación SNS/SQS permite distribuir mensajes y procesarlos de forma desacoplada. [F7] La publicación recuperable y el tratamiento de duplicados se detallan en la sección 12.
 
-## 7. Los seis microservicios
+## 7. Los siete microservicios
 
-### 7.0. MS0 — Usuarios y acceso (añadido por indicación docente)
+El enunciado exige un mínimo de cinco microservicios protegidos. La propuesta entrega siete: **MS0** (usuarios, pedido por el docente), **MS1–MS5** (núcleo del negocio FSM) y **MS6** (analítica y enrutamiento inteligente). Cada uno tiene sus funciones Lambda, sus rutas protegidas y su persistencia exclusiva.
+
+### 7.0. MS0 — Usuarios y acceso (requerido por indicación docente)
 
 **Responsabilidad:** administrar usuarios y credenciales de acceso **dentro de cada tenant**, sin mezclar las cuentas de diferentes empresas. El docente lo pidió explícitamente en la explicación del proyecto [F16].
 
@@ -339,7 +359,7 @@ La combinación SNS/SQS permite distribuir mensajes y procesarlos de forma desac
 
 **Pantallas:** inicio de sesión y gestión de usuarios para el administrador. **Infraestructura vinculada:** Lambda de autenticación/autorización, API Gateway y tablas DynamoDB propias del MS0.
 
-**Alcance:** es un **sexto microservicio real**, no un alias de Cognito ni una tabla compartida entre los demás módulos. Su persistencia y sus permisos de acceso se despliegan de forma declarativa.
+**Alcance:** es un **microservicio real**, no un alias de Cognito ni una tabla compartida entre los demás módulos. Su persistencia y sus permisos de acceso se despliegan de forma declarativa.
 
 
 ### 7.1. MS1 — Clientes y ubicaciones
@@ -432,22 +452,22 @@ Guarda diagnóstico, tareas, materiales descriptivos, resultado y referencias a 
 
 **Responsabilidad:** agregar métricas históricas por técnico y tenant para alimentar la asignación automática y el dashboard del coordinador.
 
-No tiene operaciones de escritura desde el frontend. Escucha eventos ya existentes del bus SNS/SQS y construye su propio estado. Si falla, el resto del sistema opera sin interrupciones.
+No tiene operaciones de escritura desde el frontend. Escucha eventos ya existentes del bus SNS/SQS y construye su propio estado. Si falla, el resto del sistema opera sin interrupciones: cuando Agenda no obtiene respuesta de Analítica, ofrece los técnicos compatibles en un orden por defecto y sin justificación de métricas.
 
-**Datos que administra:** métricas por técnico (visitas completadas, revisitas generadas, tiempo promedio de atención, tasa de resolución en primer intento), métricas por tenant (órdenes abiertas, cerradas y canceladas por período) y snapshots diarios.
+**Datos que administra:** métricas acumuladas por técnico (visitas completadas, revisitas generadas, tiempo promedio de atención, tasa de resolución en primer intento), snapshots diarios por técnico (carga del día), métricas por tenant (órdenes abiertas, cerradas y canceladas por período) y snapshots mensuales del tenant.
 
 **Operaciones mínimas:**
 - Consultar métricas de un técnico por tenant (para el enrutamiento de MS4)
 - Consultar dashboard de métricas del tenant (para el coordinador)
 - Consultar ranking de técnicos por carga y rendimiento
 
-**Cómo se alimenta:** consume `VisitaCompletada`, `ParteFinalizado` y `OrdenCerrada` desde su propia cola SQS. Cada evento actualiza los contadores del técnico y del tenant correspondiente en su tabla DynamoDB.
+**Cómo se alimenta:** consume `VisitaProgramada`, `VisitaReprogramada`, `VisitaCancelada`, `VisitaCompletada`, `ParteFinalizado`, `OrdenCreada`, `OrdenCerrada` y `OrdenCancelada` desde su propia cola SQS. Cada evento actualiza los contadores del técnico, del día y del tenant correspondiente en su tabla DynamoDB.
 
 **Integración con MS4 — enrutamiento inteligente:**
 
-Cuando MS4 va a sugerir un técnico para una nueva visita, en lugar de elegir al primero disponible con la especialidad requerida, consulta MS6 y pondera tres criterios:
+Cuando MS4 va a sugerir un técnico para una nueva visita, en lugar de elegir al primero disponible con la especialidad requerida, consulta MS6 y aplica estos criterios, en orden:
 
-| Criterio | Peso propuesto |
+| Criterio | Tipo |
 |---|---|
 | Disponibilidad de agenda | Obligatorio (filtro duro) |
 | Especialidad compatible | Obligatorio (filtro duro) |
@@ -494,6 +514,7 @@ Este diagrama representa relaciones del negocio. En DynamoDB no se convierte aut
 | API Gateway | Autorizador | Comprobar acceso a la ruta. | Mecanismo de autorización. |
 | API Gateway | Servicio correspondiente | Ejecutar la operación solicitada. | Invocación Lambda. |
 | Órdenes | Clientes | Validar cliente y ubicación. | Consulta autenticada a su API. |
+| Frontend | Analítica | Dashboard del tenant y rendimiento de técnicos. | HTTPS por API Gateway, solo lectura. |
 | Agenda | Técnicos | Validar especialidad, jornada y ausencia. | Consulta autenticada a su API. |
 | Agenda | Órdenes | Verificar la orden y su situación. | Consulta autenticada a su API. |
 | Partes | Agenda | Verificar visita, técnico y estado. | Consulta autenticada a su API. |
@@ -503,6 +524,7 @@ Este diagrama representa relaciones del negocio. En DynamoDB no se convierte aut
 | Agenda | Órdenes | Informar programación, cancelación o terminación. | Eventos por SNS y SQS. |
 | Órdenes | Agenda | Bloquear nuevas visitas antes de cerrar o cancelar. | Comando interno autenticado e idempotente. |
 | Agenda | Analítica | Consultar métricas de técnico para sugerir asignación óptima. | Consulta autenticada a su API. |
+| Agenda, Órdenes y Partes | Analítica | Informar hechos que alimentan las métricas. | Eventos por SNS y SQS (cola propia de Analítica). |
 | Analítica | — | Solo lectura de eventos; no escribe en otros servicios. | Consumidor de cola SQS propia. |
 
 **Regla de propiedad:** cada servicio escribe en sus tablas. Las llamadas internas también deben autenticar al emisor y conservar el contexto de empresa.
@@ -815,7 +837,7 @@ La ruta del archivo no concede acceso por sí misma. El backend autoriza la oper
 
 ### 10.8. MS6: métricas de analítica
 
-**Tabla propia:** `t_analitica`. Dos tipos de registro principales: métricas por técnico y métricas por tenant.
+**Tabla propia:** `t_analitica`. Tres tipos de registro: métricas acumuladas por técnico, snapshot diario por técnico (carga del día) y snapshot mensual del tenant.
 
 ```json
 {
@@ -825,10 +847,26 @@ La ruta del archivo no concede acceso por sí misma. El backend autoriza la oper
   "tenant_id": "CLIMALIMA",
   "tecnico_id": "TEC-001",
   "visitas_completadas_total": 142,
-  "visitas_completadas_hoy": 3,
   "revisitas_generadas": 8,
   "tasa_resolucion_primer_intento": 0.94,
   "tiempo_promedio_atencion_min": 52,
+  "ultima_actualizacion": "2026-11-10T16:05:00Z"
+}
+```
+
+El registro anterior acumula el historial completo. La carga del día se guarda aparte, un registro por técnico y fecha, para no reiniciar contadores:
+
+```json
+{
+  "PK": "TENANT#CLIMALIMA",
+  "SK": "TECNICO#TEC-001#DIA#2026-11-10",
+  "entity_type": "SNAPSHOT_TECNICO_DIA",
+  "tenant_id": "CLIMALIMA",
+  "tecnico_id": "TEC-001",
+  "fecha": "2026-11-10",
+  "visitas_asignadas": 3,
+  "visitas_completadas": 1,
+  "revisitas_generadas": 0,
   "ultima_actualizacion": "2026-11-10T16:05:00Z"
 }
 ```
@@ -850,7 +888,7 @@ La ruta del archivo no concede acceso por sí misma. El backend autoriza la oper
 }
 ```
 
-**Consultas necesarias:** métricas de un técnico por tenant (llamada interna de MS4); ranking de técnicos ordenado por carga del día y tasa de resolución; snapshot del tenant para el dashboard del coordinador.
+**Consultas necesarias:** métricas acumuladas y carga del día de un técnico por tenant (llamada interna de MS4); ranking de técnicos ordenado por carga del día y tasa de resolución; snapshot del tenant para el dashboard del coordinador.
 
 Los contadores se actualizan de forma incremental al procesar cada evento — no se recalculan desde cero. Si llega un evento duplicado, el procesador verifica el INBOX y no vuelve a incrementar.
 
@@ -874,7 +912,7 @@ Los diagramas de esta sección omiten API Gateway y el autorizador cuando no son
 2. MS0 verifica que la cuenta existe dentro de ese tenant, está activa y tiene el rol correspondiente.
 3. Se entrega un token con expiración y el frontend lo envía al llamar a APIs protegidas.
 4. El autorizador valida el token y crea el contexto `usuario_id`, `tenant_id`, `rol`.
-5. MS1–MS5 consultan y modifican datos **solo** con ese contexto; no aceptan un tenant distinto suministrado desde el navegador.
+5. MS1–MS6 consultan y modifican datos **solo** con ese contexto; no aceptan un tenant distinto suministrado desde el navegador.
 
 **Resultado visible:** ClimaLima y FríoSur pueden iniciar sesión con cuentas propias sin ver información mutua.
 
@@ -915,25 +953,33 @@ Si el usuario repite la misma solicitud, el backend devuelve la orden ya creada.
 
 **Actor:** coordinador.
 
-1. Abre una orden y elige un técnico o especialidad.
+1. Abre una orden y elige un técnico o especialidad, o solicita una sugerencia automática.
 2. Agenda consulta jornada y ausencias en Técnicos.
 3. Combina esa información con sus reservas existentes.
-4. Muestra opciones de horario.
-5. El coordinador selecciona una opción.
-6. Al guardar, Agenda vuelve a validar orden, técnico y horario.
-7. Una transacción crea la visita, reserva los bloques, incrementa el contador de visitas activas y guarda el evento pendiente.
-8. Si algún bloque está ocupado o la orden ya no admite visitas, toda la reserva falla.
-9. Si se confirma, se informa al usuario y se publicará `VisitaProgramada`.
+4. Para la sugerencia, consulta a Analítica la carga del día y la tasa de resolución de los candidatos y los ordena; si Analítica no responde, usa el orden por defecto.
+5. Muestra opciones de horario, con la justificación de la sugerencia cuando existe.
+6. El coordinador acepta la sugerencia o selecciona otra opción.
+7. Al guardar, Agenda vuelve a validar orden, técnico y horario.
+8. Una transacción crea la visita, reserva los bloques, incrementa el contador de visitas activas y guarda el evento pendiente.
+9. Si algún bloque está ocupado o la orden ya no admite visitas, toda la reserva falla.
+10. Si se confirma, se informa al usuario y se publicará `VisitaProgramada`, que también alimenta la carga del día en Analítica.
 
-### Diagrama 7. Reserva de visita
+### Diagrama 7. Sugerencia y reserva de visita
 
 ```mermaid
 sequenceDiagram
     actor C as Coordinador
     participant A as MS4 Agenda
     participant T as MS2 Técnicos
+    participant AN as MS6 Analítica
     participant O as MS3 Órdenes
     participant DB as DynamoDB Agenda
+    C->>A: Solicitar sugerencia de técnico y horario
+    A->>T: Consultar jornadas y especialidades compatibles
+    T-->>A: Candidatos disponibles
+    A->>AN: Consultar carga del día y tasa de resolución
+    AN-->>A: Métricas (si no responde, orden por defecto)
+    A-->>C: Sugerencia con justificación
     C->>A: Reservar técnico y horario
     A->>O: Validar orden y tenant
     O-->>A: Orden admite atención
@@ -1071,6 +1117,7 @@ Para consultar una evidencia, el backend vuelve a verificar el acceso y emite un
 7. Agenda cambia la visita a `FINALIZADA`, actualiza su control y genera `VisitaCompletada`.
 8. Órdenes registra el parte en su historial y procesa la confirmación de Agenda.
 9. Si la atención resolvió el trabajo y no hay pendientes conocidos, presenta la orden para revisión. Si requiere seguimiento, lo muestra como pendiente.
+10. Analítica procesa `ParteFinalizado` y `VisitaCompletada` desde su propia cola y actualiza las métricas del técnico, del día y del tenant. No interviene en el estado de la visita ni de la orden.
 
 **La pantalla puede mostrar “Parte guardado; actualizando la orden”** mientras se procesan los eventos. Después vuelve a consultar el estado.
 
@@ -1149,9 +1196,14 @@ El estado general debe derivarse de las visitas y resultados vigentes. Un evento
 | ParteFinalizado | Partes | Agenda | Confirmar la terminación de la visita si la transición es válida. |
 | ParteFinalizado | Partes | Órdenes | Registrar el resultado informado y la referencia al parte. |
 | VisitaCompletada | Agenda | Órdenes | Confirmar el estado terminal y resultado de la visita. |
+| VisitaProgramada | Agenda | Analítica | Sumar a la carga del día del técnico y a las visitas programadas del tenant. |
+| VisitaReprogramada | Agenda | Analítica | Mover la carga entre días o técnicos si cambia la fecha o la asignación. |
+| VisitaCancelada | Agenda | Analítica | Restar de la carga del día del técnico. |
 | VisitaCompletada | Agenda | Analítica | Actualizar contadores del técnico: visitas del día, tiempo de atención y tasa de resolución. |
 | ParteFinalizado | Partes | Analítica | Registrar resultado del parte para calcular tasa de resolución en primer intento. |
+| OrdenCreada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes abiertas. |
 | OrdenCerrada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes cerradas y tiempo promedio de cierre. |
+| OrdenCancelada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes canceladas. |
 
 `VisitaCompletada` representa la finalización operativa del intento de atención. Su resultado puede ser `RESUELTO`, `REQUIERE_REVISITA` o `NO_ATENDIDO`; el nombre del evento no implica que toda la orden esté resuelta.
 
@@ -1187,19 +1239,21 @@ El estado general debe derivarse de las visitas y resultados vigentes. Un evento
 
 Las versiones de una visita y de un parte son independientes. No se comparan entre sí como si fueran un único contador global.
 
-### 12.3. Dos colas para dos consumidores
+### 12.3. Tres colas para tres consumidores
 
-Se propone un tema SNS de eventos FSM y dos colas de negocio:
+Se propone un tema SNS de eventos FSM y tres colas, una por consumidor:
 
 | Cola | Mensajes que recibe | Procesador |
 |---|---|---|
 | Cola de Agenda | ParteFinalizado. | Lambda del servicio Agenda. |
 | Cola de Órdenes | Eventos de Agenda y ParteFinalizado. | Lambda del servicio Órdenes. |
-| Cola de Analítica | VisitaCompletada, ParteFinalizado y OrdenCerrada. | Lambda del servicio Analítica. |
+| Cola de Analítica | Eventos de visita (programada, reprogramada, cancelada, completada), ParteFinalizado y eventos de orden (creada, cerrada, cancelada). | Lambda del servicio Analítica. |
 
 Las suscripciones filtran por tipo de evento. Cada cola tiene su propia configuración de reintentos y una cola de errores.
 
 Si dos funciones compiten por una sola cola, no se obtiene automáticamente una copia para cada área. Por eso se utilizan colas separadas para los consumidores que necesitan procesar el mismo hecho.
+
+Analítica solo consume: sus fallos o retrasos no afectan a Agenda ni a Órdenes, y sus mensajes pendientes se acumulan en su propia cola hasta ser procesados.
 
 ### 12.4. Guardar también el aviso pendiente
 
@@ -1239,7 +1293,7 @@ Si el evento es válido pero llega antes que otro dato necesario, se mantiene un
 
 ### 13.1. Qué exige el enunciado
 
-La explicación oral señala **al menos 30 000 registros por microservicio repartidos en tres tenants**, aproximadamente 10 000 por tenant, y ordena no usar el API REST para la carga [F16]. Los cinco servicios FSM conservan un mínimo de **150 000 registros de negocio** en total. Si MS0 Usuarios también está sujeto al mínimo, el objetivo para seis microservicios sube a **180 000 registros**.
+La explicación oral señala **al menos 30 000 registros por microservicio repartidos en tres tenants**, aproximadamente 10 000 por tenant, y ordena no usar el API REST para la carga [F16]. Los seis servicios MS1–MS6 (cinco de negocio más Analítica) suman un mínimo de **180 000 registros** en total. Si MS0 Usuarios también está sujeto al mínimo, el objetivo para siete microservicios sube a **210 000 registros**.
 
 **Pendiente de confirmar con el profesor o asistente:** si los 30 000 registros aplican también a MS0. La transcripción no establece una excepción. Hasta aclararlo, se diseña el generador para poder alcanzar ambas alternativas, sin crear 30 000 cuentas activas inseguras. Tampoco se requieren 30 000 técnicos distintos ni 30 000 registros por tenant de cada microservicio: son 30 000 por servicio repartidos entre los tres tenants.
 
@@ -1253,11 +1307,11 @@ La explicación oral señala **al menos 30 000 registros por microservicio repar
 | Órdenes | 10 000 órdenes históricas cerradas y 20 no cerradas, en estado PROGRAMADA. | 30 060 órdenes. |
 | Agenda | 10 000 visitas históricas finalizadas y 20 programadas. | 30 060 visitas. |
 | Partes | 10 000 partes históricos finalizados. | 30 000 partes. |
-| Analítica | Un registro de métricas por técnico (50 por tenant) + snapshots mensuales históricos hasta completar 10 000 registros por tenant. | 30 000 registros de analítica. |
+| Analítica | 50 registros de métricas acumuladas (uno por técnico) y 10 000 snapshots diarios (50 técnicos × 200 días), más los snapshots mensuales del tenant. | 30 150 registros de analítica, más los snapshots mensuales. |
 
-Los seis servicios FSM producen **al menos 180 270 registros de negocio**, antes de añadir ubicaciones u otros registros. **Si se incluyen 30 000 perfiles en Usuarios, el total sería al menos 210 270**. Las cifras son metas de implementación; el volumen de Usuarios permanece sujeto a confirmación.
+Los seis servicios MS1–MS6 producen **al menos 180 420 registros de negocio**, antes de añadir ubicaciones u otros registros. **Si se incluyen 30 000 perfiles en Usuarios, el total sería al menos 210 420**. Las cifras son metas de implementación; el volumen de Usuarios permanece sujeto a confirmación.
 
-Para Técnicos: **50 técnicos × 200 jornadas = 10 000 jornadas por empresa**. Las fechas de las jornadas deben cubrir las atenciones históricas y futuras que se generen.
+Para Técnicos: **50 técnicos × 200 jornadas = 10 000 jornadas por empresa**. Las fechas de las jornadas deben cubrir las atenciones históricas y futuras que se generen. Los snapshots diarios de Analítica usan los mismos 200 días y los mismos 50 técnicos, y sus conteos de visitas deben coincidir con las visitas históricas generadas en Agenda.
 
 ### 13.3. Procedimiento técnico de carga (aclaración explícita del profesor)
 
@@ -1286,7 +1340,8 @@ MV de desarrollo / AWS Academy
 6. Generar visitas con técnicos del mismo tenant y horarios compatibles.
 7. Crear partes para las visitas históricas finalizadas.
 8. Construir los bloques de las visitas programadas y los controles de Agenda, con contadores coherentes. Estos auxiliares no completan el mínimo de datos de negocio.
-9. Preparar unas pocas atenciones de demo y producir el reporte por tabla, tenant y tipo de registro.
+9. Calcular las métricas acumuladas, los snapshots diarios por técnico y los snapshots mensuales del tenant a partir de las visitas, partes y órdenes ya generadas, de modo que Analítica sea coherente con los demás servicios.
+10. Preparar unas pocas atenciones de demo y producir el reporte por tabla, tenant y tipo de registro.
 
 El script tendrá validación de `--stage`, control del entorno/credenciales, claves idempotentes y salida de conteos. Nunca almacenará llaves de acceso dentro del repositorio. Las operaciones de carga deben respetar las relaciones entre entidades y no activar flujos de negocio ni notificaciones reales sin control.
 
@@ -1339,7 +1394,7 @@ El calendario visual puede comenzar como una lista por fecha y técnico. Lo indi
 | Ruta propuesta | Contenido |
 |---|---|
 | `frontend/` | Aplicación React y sus pantallas. |
-| `backend/usuarios/` | Registro administrado, login, tokens, autorizador y persistencia MS0. |
+| `backend/usuarios/` | Registro administrado, login, tokens, autorizador y persistencia del MS0. |
 | `backend/clientes/` | Funciones, validaciones y datos del MS1. |
 | `backend/tecnicos/` | Funciones, validaciones y datos del MS2. |
 | `backend/ordenes/` | API, consumidor y lógica del MS3. |
@@ -1412,11 +1467,11 @@ Las fechas intermedias son **metas internas**. Los hitos oficiales están señal
 
 | Fechas | Objetivo | Trabajo | Resultado verificable |
 |---|---|---|---|
-| 27–29 de octubre | Acordar el producto y actualizar requisitos | Rubro, alcance, roles, seis servicios, instrucciones orales y contratos. | Documento de alcance y arquitectura actualizado (v2). |
-| 30 de octubre–2 de noviembre | Tener una base desplegada | **MS0 Usuarios primero**, autorizador, tablas de seis servicios, rutas y primera interfaz en Amplify. | Login de dos tenants, una operación protegida por servicio y web accesible. |
+| 27–29 de octubre | Acordar el producto y actualizar requisitos | Rubro, alcance, roles, siete servicios, instrucciones orales y contratos. | Documento de alcance y arquitectura. |
+| 30 de octubre–2 de noviembre | Tener una base desplegada | **MS0 Usuarios primero**, autorizador, tablas de los siete servicios, rutas y primera interfaz en Amplify. | Login de dos tenants, una operación protegida por servicio y web accesible. |
 | 3–8 de noviembre | Completar el recorrido central | Clientes, técnicos, órdenes, programación y registro de atención utilizando identidad MS0. | Una atención recorre los cinco servicios de negocio, con sesión protegida. |
-| 9–12 de noviembre | Conectar archivos y eventos | S3, SNS, SQS, publicadores y consumidores. | Un parte produce los cambios derivados esperados. |
-| 13–14 de noviembre | Preparar y presentar avance | Estabilizar el recorrido, recoger evidencias y ensayar. | **Hito oficial: avance del 30 % y exposición virtual con ACL hasta el sábado 14.** |
+| 9–12 de noviembre | Conectar archivos y eventos | S3, SNS, SQS, publicadores y consumidores (Agenda, Órdenes y Analítica); sugerencia de técnico con métricas de MS6. | Un parte produce los cambios derivados esperados, incluidas las métricas, y Agenda sugiere un técnico con justificación. |
+| 13–14 de noviembre | Preparar y presentar avance | Estabilizar el recorrido, incluido el dashboard de analítica, recoger evidencias y ensayar. | **Hito oficial: avance del 30 % y exposición virtual con ACL hasta el sábado 14.** |
 | 15–18 de noviembre | Completar volumen y casos importantes | Carga desde MV con Python/boto3, conteos, separación, conflictos y reprogramación; aclarar volumen MS0. | Tres tenants con volumen y reglas comprobadas, sin carga por API REST. |
 | 19–20 de noviembre | Consolidar documentación | Informe, PPT, diagramas actualizados y README. | Borrador final de entregables. |
 | 21 de noviembre | Ensayo completo | Demo, revisión de enlaces y corrección de fallos concretos. | Versión candidata a entrega. |
@@ -1425,9 +1480,9 @@ Las fechas intermedias son **metas internas**. Los hitos oficiales están señal
 
 El PDF no explica cómo convertir cada funcionalidad en un porcentaje de avance. Este cronograma busca llegar con margen; no afirma que la lista de tareas del 14 de noviembre sea la fórmula oficial del 30 %.
 
-### 16.2. Reparto si son cinco integrantes y existen seis microservicios
+### 16.2. Reparto si son cinco integrantes y existen siete microservicios
 
-El grupo puede seguir teniendo **cinco integrantes**: «seis microservicios» describe componentes de software, **no seis integrantes**. La propuesta combina dos responsabilidades en un integrante y exige revisión cruzada de seguridad.
+El grupo tiene **cinco integrantes**: «siete microservicios» describe componentes de software, **no siete integrantes**. La propuesta combina dos responsabilidades en tres de los integrantes y exige revisión cruzada de seguridad.
 
 | Integrante | Responsabilidad principal | Trabajo asociado | Coordinación adicional |
 |---|---|---|---|
@@ -1463,6 +1518,7 @@ La siguiente tabla orienta verificaciones necesarias del comportamiento. No obli
 | Token de otro tenant | No permite forzar el acceso alterando `tenant_id` del body, path o query string. |
 | Cuenta inactiva | No permite iniciar sesión ni renovar una sesión activa sin revalidación aplicable. |
 | Aislamiento entre empresas | Un usuario de FríoSur no consulta ni modifica una orden de ClimaLima. |
+| Aislamiento de analítica | El dashboard y el ranking de FríoSur muestran solo métricas de sus técnicos y órdenes. |
 | Permiso del técnico | Solo registra atención sobre una visita que le corresponde. |
 | Referencias válidas | Una orden no acepta cliente o ubicación de otro tenant. |
 | Creación repetida | Repetir la misma solicitud devuelve la misma orden. |
@@ -1473,11 +1529,13 @@ La siguiente tabla orienta verificaciones necesarias del comportamiento. No obli
 | Visita en ejecución | Bloquea reprogramación o cancelación por el flujo normal. |
 | Evidencia | El archivo existe y se consulta con autorización. |
 | Parte no resuelto | Finaliza la visita, pero mantiene trabajo pendiente en la orden. |
-| Mensaje duplicado | Produce el mismo efecto que procesarlo una vez. |
+| Mensaje duplicado | Produce el mismo efecto que procesarlo una vez; en Analítica no incrementa dos veces un contador. |
+| Sugerencia de técnico | Propone solo técnicos disponibles y con especialidad compatible, ordenados por carga del día y tasa de resolución, con justificación visible. |
+| Analítica no disponible | Agenda sigue permitiendo programar visitas con el orden por defecto. |
 | Mensaje atrasado | No revierte un estado más reciente. |
 | Publicación fallida | El evento pendiente puede recuperarse y publicarse. |
 | Cierre concurrente | No se confirma una nueva visita después de bloquear el cierre. |
-| Datos | Existen al menos 30 000 registros de negocio por cada servicio FSM y tres tenants; el volumen de MS0 queda documentado según la aclaración docente. |
+| Datos | Existen al menos 30 000 registros de negocio por cada servicio MS1–MS6 y tres tenants; el volumen de MS0 queda documentado según la aclaración docente. |
 | Carga directa | Se evidencian script Python/boto3, ejecución desde MV y conteos; no se usa API REST para cargas masivas. |
 | Despliegue | La configuración y el procedimiento reproducen el entorno previsto. |
 
@@ -1539,7 +1597,7 @@ Contenido sugerido:
 
 ### 19.2. Resumen PowerPoint
 
-Se propone una presentación centrada en problema, solución, **seis microservicios (Usuarios + cinco FSM)**, arquitectura, flujo de una atención, separación entre empresas, eventos, carga directa y evidencias. Los diagramas deben coincidir con los recursos efectivamente implementados.
+Se propone una presentación centrada en problema, solución, **siete microservicios (Usuarios, cinco de negocio y Analítica)**, arquitectura, flujo de una atención, separación entre empresas, eventos, carga directa y evidencias. Los diagramas deben coincidir con los recursos efectivamente implementados.
 
 ### 19.3. Fechas y condiciones
 
@@ -1572,12 +1630,12 @@ El documento advierte que no presentarse a la exposición presencial implica una
 | Nombre | **Trazora FSM** — «Cada visita bajo control». | Marca creativa provisional, disponibilidad no verificada. |
 | Siete microservicios | MS0 Usuarios y acceso + MS1–MS5 Clientes, Técnicos, Órdenes, Agenda y Partes + MS6 Analítica. | MS0 añadido por indicación oral; MS6 añadido para enrutamiento inteligente y dashboard. |
 | Persistencia propia | Tablas exclusivas por servicio. | Concreta el requisito usando DynamoDB. |
-| Volumen | 30 000 registros para cada microservicio FSM; evaluar MS0. | **Consultar si Usuarios también exige 30 000** y registrar respuesta. |
+| Volumen | 30 000 registros para cada microservicio MS1–MS6; evaluar MS0. | **Consultar si Usuarios también exige 30 000** y registrar respuesta. |
 | Carga | Script Python/boto3 en MV hacia DynamoDB. | **Instrucción oral expresa:** no usar API REST para datos masivos. |
 | Identidad | **MS0 Usuarios**, tokens con expiración y autorizador Lambda. | Basarse en Taller Serverless 1; Cognito no disponible en el laboratorio descrito [F17]. |
 | Automatización | Serverless Framework y recursos declarativos. | El PDF no especifica versión; documentar la elegida. |
 | Cierre | Revisión del coordinador y bloqueo en Agenda. | Evita equiparar un parte final con una orden resuelta. |
-| Eventos | Persistencia de pendientes, dos colas e idempotencia. | Recomendaciones de diseño para tolerar fallos concretos. |
+| Eventos | Persistencia de pendientes, tres colas (Agenda, Órdenes, Analítica) e idempotencia. | Recomendaciones de diseño para tolerar fallos concretos. |
 | Estados | Reglas explícitas por orden y visita. | Deben mantenerse iguales en backend, frontend y documentos. |
 | ACL | Mantener la denominación del PDF. | El enunciado no desarrolla el acrónimo. |
 | Presencial | Semana 16. | El PDF no fija un día exacto. |
@@ -1587,14 +1645,14 @@ Las restricciones de 30 minutos, cuatro horas por visita, un técnico principal 
 ## 21. Primeras tareas concretas
 
 - [ ] Acordar el rubro y registrar el alcance de la primera versión.
-- [ ] Asignar responsables de los **seis microservicios** entre los cinco integrantes.
+- [ ] Asignar responsables de los **siete microservicios** entre los cinco integrantes.
 - [ ] Revisar juntos orden, visita, parte y sus estados.
 - [ ] Definir el formato común de IDs, tenant, errores y eventos.
 - [ ] **Confirmar con el profesor si MS0 Usuarios también debe contener 30 000 registros.**
 - [ ] Verificar permisos del entorno AWS Academy y validar el diseño de MS0 sin depender de Cognito.
 - [ ] Crear la estructura del repositorio y la configuración inicial.
 - [ ] Implementar MS0 (login, usuarios por tenant, roles y autorizador) antes de conectar las APIs restantes.
-- [ ] Publicar una pantalla en Amplify y una operación protegida por cada uno de los seis servicios.
+- [ ] Publicar una pantalla en Amplify y una operación protegida por cada uno de los siete servicios.
 - [ ] Preparar tres tenants con pocos datos y **cuentas propias** de ejemplo.
 - [ ] Preparar `scripts/seed/cargar_datos.py` para inserción directa con boto3 desde MV, sin usar endpoints.
 - [ ] Completar una atención de extremo a extremo.
@@ -1605,7 +1663,7 @@ Las restricciones de 30 minutos, cuatro horas por visita, un técnico principal 
 
 ## 22. Fuentes
 
-Las fuentes respaldan los requisitos del curso y las capacidades de las plataformas. El profesor **sí exige** usuarios multitenant como microservicio y carga directa por boto3 [F16]; la decisión de conservar cinco microservicios FSM y sumar MS0, sus contratos, estados, cronograma interno y nombre creativo son propuestas del equipo.
+Las fuentes respaldan los requisitos del curso y las capacidades de las plataformas. El profesor **sí exige** usuarios multitenant como microservicio y carga directa por boto3 [F16]; la decisión de contar con cinco microservicios de negocio, MS0 y MS6 Analítica, sus contratos, estados, cronograma interno y nombre creativo son propuestas del equipo.
 
 - **[F16] Explicación oral del profesor (transcripción).** Archivo «Proyecto final audio desde 46m.txt», proporcionado por el usuario. Indica MS de usuarios multitenant, al menos cinco MS protegidos, 30 000 por servicio repartidos en tres tenants, carga directa Python/boto3 desde MV, Amplify, eventos y plazos.
 - **[F17] Taller Serverless 1: Sistema de Seguridad.** Archivo «1. Serverless - Taller 1 - V2.00.pdf», diapositiva 7: advierte que Cognito no está disponible en AWS Academy; presenta alta, login, tokens con vencimiento y acceso protegido.
@@ -1625,6 +1683,6 @@ Las fuentes respaldan los requisitos del curso y las capacidades de las platafor
 - **[F14] Serverless Framework.** [AWS infrastructure resources](https://www.serverless.com/framework/docs/providers/aws/guide/resources).
 - **[F15] AWS.** [AWS::Amplify::App in CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-amplify-app.html).
 
-**Consulta inicial de documentación:** 27 de octubre de 2026. **Revisión académica y de alcance:** 29 de octubre de 2026. Antes de implementar, fijar las versiones y verificar las opciones disponibles en la cuenta autorizada del curso.
+**Consulta inicial de documentación:** 27 de octubre de 2026. **Revisión académica y de alcance:** 29 de octubre de 2026. **Propuesta final:** 3 de noviembre de 2026. Antes de implementar, fijar las versiones y verificar las opciones disponibles en la cuenta autorizada del curso.
 
 
