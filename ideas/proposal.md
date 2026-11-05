@@ -4,14 +4,14 @@
 
 **Curso:** CS2032 — Cloud Computing, ciclo 2026-2  
 **Tipo de proyecto:** Field Service Management, como Software as a Service en AWS  
-**Versión:** propuesta final — 3 de noviembre de 2026  
+**Versión:** propuesta final  
 **Rubro:** instalación, reparación y mantenimiento de aire acondicionado  
 **Nombre provisional:** Trazora FSM  
 **Concepto del nombre:** combina *trazabilidad* y *operación*. Lema propuesto: **«Cada visita bajo control»**. Es una propuesta creativa; la disponibilidad comercial del nombre no ha sido verificada.
 
 > **Idea central:** construir una aplicación que permita a varias empresas de servicio técnico organizar a sus clientes, su personal, sus órdenes de trabajo, sus visitas y las evidencias de cada atención. Cada empresa utiliza la misma plataforma, con acceso únicamente a la información que le corresponde.
 
-Este documento es la propuesta final para implementar. Los requisitos académicos se identifican como **obligatorios según el enunciado**; las decisiones de producto y arquitectura se presentan como **diseño propuesto**. Las fechas internas son metas del equipo, mientras que los plazos oficiales se identifican expresamente.
+Este documento es la propuesta final para implementar. Los requisitos académicos se identifican como **obligatorios según el enunciado**; las decisiones de producto y arquitectura se presentan como **diseño propuesto**.
 
 ### Resumen de la propuesta
 
@@ -56,10 +56,10 @@ Los diagramas están escritos en **Mermaid**, dentro del propio Markdown. Se pue
 13. [Carga de datos ficticios](#13-carga-de-datos-ficticios)
 14. [Pantallas y experiencia de uso](#14-pantallas-y-experiencia-de-uso)
 15. [Organización del código y despliegue](#15-organización-del-código-y-despliegue)
-16. [Plan de trabajo y reparto del equipo](#16-plan-de-trabajo-y-reparto-del-equipo)
+16. [Reparto del equipo](#16-reparto-del-equipo)
 17. [Criterios de aceptación y pruebas](#17-criterios-de-aceptación-y-pruebas)
 18. [Guion de demostración](#18-guion-de-demostración)
-19. [Entregables, evaluación y fechas oficiales](#19-entregables-evaluación-y-fechas-oficiales)
+19. [Entregables y evaluación](#19-entregables-y-evaluación)
 20. [Decisiones que conviene dejar documentadas](#20-decisiones-que-conviene-dejar-documentadas)
 21. [Primeras tareas concretas](#21-primeras-tareas-concretas)
 22. [Fuentes](#22-fuentes)
@@ -1497,32 +1497,13 @@ Los nombres reales de comandos y opciones deben documentarse al implementar el r
 
 ### 15.4. Control del entorno
 
-Durante los primeros días se verifican los permisos que ofrece la cuenta del curso, los servicios disponibles y el mecanismo de identidad. Se revisan consumo, registros y recursos que quedan activos.
+Al inicio se verifican los permisos que ofrece la cuenta del curso, los servicios disponibles y el mecanismo de identidad. Se revisan consumo, registros y recursos que quedan activos.
 
 Los índices, las transacciones, la carga de datos y la retención de registros pueden influir en el uso de recursos. Esta propuesta no asume un costo fijo ni gratuidad del entorno.
 
-## 16. Plan de trabajo y reparto del equipo
+## 16. Reparto del equipo
 
-### 16.1. Cronograma propuesto
-
-Las fechas intermedias son **metas internas**. Los hitos oficiales están señalados. La hora de entrega se reproduce del enunciado; la planificación del equipo utiliza America/Lima.
-
-| Fechas | Objetivo | Trabajo | Resultado verificable |
-|---|---|---|---|
-| 27–29 de octubre | Acordar el producto y actualizar requisitos | Rubro, alcance, roles, siete servicios, instrucciones orales y contratos. | Documento de alcance y arquitectura. |
-| 30 de octubre–2 de noviembre | Tener una base desplegada | **MS0 Usuarios primero**, autorizador, tablas de los siete servicios, rutas y primera interfaz en Amplify. | Login de dos tenants, una operación protegida por servicio y web accesible. |
-| 3–8 de noviembre | Completar el recorrido central | Clientes, técnicos, órdenes, programación y registro de atención utilizando identidad MS0. | Una atención recorre los cinco servicios de negocio, con sesión protegida. |
-| 9–12 de noviembre | Conectar archivos y eventos | S3, SNS, SQS, publicadores y consumidores (Agenda, Órdenes y Analítica); sugerencia de técnico con métricas de MS6. | Un parte produce los cambios derivados esperados, incluidas las métricas, y Agenda sugiere un técnico con justificación. |
-| 13–14 de noviembre | Preparar y presentar avance | Estabilizar el recorrido, incluido el dashboard de analítica, recoger evidencias y ensayar. | **Hito oficial: avance del 30 % y exposición virtual con ACL hasta el sábado 14.** |
-| 15–18 de noviembre | Completar volumen y casos importantes | Carga desde MV con Python/boto3, conteos, separación, conflictos y reprogramación; aclarar volumen MS0. | Tres tenants con volumen y reglas comprobadas, sin carga por API REST. |
-| 19–20 de noviembre | Consolidar documentación | Informe, PPT, diagramas actualizados y README. | Borrador final de entregables. |
-| 21 de noviembre | Ensayo completo | Demo, revisión de enlaces y corrección de fallos concretos. | Versión candidata a entrega. |
-| 22 de noviembre | Entregar | Comprobar archivos, repositorios y funcionamiento. | **Hito oficial: Canvas hasta las 23:59 del domingo 22.** |
-| Semana 16 | Exponer | Presentación y demo en el horario asignado. | **Hito oficial: exposición presencial.** |
-
-El PDF no explica cómo convertir cada funcionalidad en un porcentaje de avance. Este cronograma busca llegar con margen; no afirma que la lista de tareas del 14 de noviembre sea la fórmula oficial del 30 %.
-
-### 16.2. Reparto si son cinco integrantes y existen siete microservicios
+### 16.1. Reparto si son cinco integrantes y existen siete microservicios
 
 El grupo tiene **cinco integrantes**: «siete microservicios» describe componentes de software, **no siete integrantes**. La propuesta combina dos responsabilidades en tres de los integrantes y exige revisión cruzada de seguridad.
 
@@ -1536,7 +1517,7 @@ El grupo tiene **cinco integrantes**: «siete microservicios» describe componen
 
 La tarea de **MS0 es crítica para todos**: aunque el integrante 1 lidere la base, todos verifican autorización en sus APIs. Para equilibrar carga, el CRUD de Clientes puede ser compartido con otro integrante después de estabilizar MS0. Cada responsable entrega código, configuración, pruebas y evidencia de su módulo.
 
-### 16.3. Orden de implementación dentro de cada módulo
+### 16.2. Orden de implementación dentro de cada módulo
 
 1. Acordar el contrato de MS0: token, `tenant_id` confiable, `usuario_id` y roles; después definir entradas, salidas y reglas de cada servicio.
 2. Diseñar datos y consultas.
@@ -1547,7 +1528,7 @@ La tarea de **MS0 es crítica para todos**: aunque el integrante 1 lidere la bas
 7. Generar sus datos ficticios y verificar conteos.
 8. Documentar cómo se despliega y cómo se demuestra.
 
-Cada semana debe existir una versión integrada del sistema. La integración comienza con pocos datos y se amplía cuando los contratos son estables.
+Debe existir siempre una versión integrada del sistema. La integración comienza con pocos datos y se amplía cuando los contratos son estables.
 
 ## 17. Criterios de aceptación y pruebas
 
@@ -1617,7 +1598,7 @@ Si el tiempo lo permite, usar otro caso con `REQUIERE_REVISITA` para mostrar que
 
 El tiempo de exposición se ajustará al que indique el profesor. El PDF no establece una duración concreta de la demo.
 
-## 19. Entregables, evaluación y fechas oficiales
+## 19. Entregables y evaluación
 
 ### 19.1. Informe Word o PDF
 
@@ -1641,15 +1622,15 @@ Contenido sugerido:
 
 Se propone una presentación centrada en problema, solución, **siete microservicios (Usuarios, cinco de negocio y Analítica)**, arquitectura, flujo de una atención, separación entre empresas, eventos, carga directa y evidencias. Los diagramas deben coincidir con los recursos efectivamente implementados.
 
-### 19.3. Fechas y condiciones
+### 19.3. Condiciones
 
-| Hito oficial | Fecha o condición |
+| Elemento | Condición |
 |---|---|
 | Grupo | Mantener el del proyecto parcial; hasta cinco integrantes. |
-| Avance | Proporcional al 30 %, con exposición virtual con ACL hasta el sábado 14 de noviembre de 2026. |
-| Entrega en Canvas | Domingo 22 de noviembre de 2026, hasta las 23:59. |
+| Avance | Proporcional al 30 %, con exposición virtual con ACL. |
+| Entrega | En Canvas. |
 | Entregables | Informe Word/PDF, enlaces públicos de código y resumen PowerPoint. |
-| Presencial y demo | Semana 16, según programación del profesor. |
+| Presencial y demo | Según programación del profesor. |
 
 ### 19.4. Rúbrica
 
@@ -1680,7 +1661,6 @@ El documento advierte que no presentarse a la exposición presencial implica una
 | Eventos | Persistencia de pendientes, tres colas (Agenda, Órdenes, Analítica) e idempotencia. | Recomendaciones de diseño para tolerar fallos concretos. |
 | Estados | Reglas explícitas por orden y visita. | Deben mantenerse iguales en backend, frontend y documentos. |
 | ACL | Mantener la denominación del PDF. | El enunciado no desarrolla el acrónimo. |
-| Presencial | Semana 16. | El PDF no fija un día exacto. |
 
 Las restricciones de 30 minutos, cuatro horas por visita, un técnico principal y formatos de imagen son decisiones del producto académico. Pueden ajustarse antes de implementar si el equipo mantiene coherentes los datos, las pantallas y las reglas.
 
@@ -1705,11 +1685,11 @@ Las restricciones de 30 minutos, cuatro horas por visita, un técnico principal 
 
 ## 22. Fuentes
 
-Las fuentes respaldan los requisitos del curso y las capacidades de las plataformas. El profesor **sí exige** usuarios multitenant como microservicio y carga directa por boto3 [F16]; la decisión de contar con cinco microservicios de negocio, MS0 y MS6 Analítica, sus contratos, estados, cronograma interno y nombre creativo son propuestas del equipo.
+Las fuentes respaldan los requisitos del curso y las capacidades de las plataformas. El profesor **sí exige** usuarios multitenant como microservicio y carga directa por boto3 [F16]; la decisión de contar con cinco microservicios de negocio, MS0 y MS6 Analítica, sus contratos, estados y nombre creativo son propuestas del equipo.
 
-- **[F16] Explicación oral del profesor (transcripción).** Archivo «Proyecto final audio desde 46m.txt», proporcionado por el usuario. Indica MS de usuarios multitenant, al menos cinco MS protegidos, 30 000 por servicio repartidos en tres tenants, carga directa Python/boto3 desde MV, Amplify, eventos y plazos.
+- **[F16] Explicación oral del profesor (transcripción).** Archivo «Proyecto final audio desde 46m.txt», proporcionado por el usuario. Indica MS de usuarios multitenant, al menos cinco MS protegidos, 30 000 por servicio repartidos en tres tenants, carga directa Python/boto3 desde MV, Amplify y eventos.
 - **[F17] Taller Serverless 1: Sistema de Seguridad.** Archivo «1. Serverless - Taller 1 - V2.00.pdf», diapositiva 7: advierte que Cognito no está disponible en AWS Academy; presenta alta, login, tokens con vencimiento y acceso protegido.
-- **[F1] Enunciado del curso.** “2. Proyecto Final (Entrega Semana 15) V5.00 (1).pdf”, proporcionado por el usuario. Páginas 5: rúbrica; 6: asignación FSM; 7: requisitos técnicos; 9: entregables y plazo.
+- **[F1] Enunciado del curso.** “2. Proyecto Final (Entrega Semana 15) V5.00 (1).pdf”, proporcionado por el usuario. Páginas 5: rúbrica; 6: asignación FSM; 7: requisitos técnicos; 9: entregables.
 - **[F2] ServiceTitan.** [Dispatch software](https://www.servicetitan.com/features/dispatch-software) y [Field Mobile App](https://www.servicetitan.com/features/field-mobile-app).
 - **[F3] Jobber.** [Scheduling](https://www.getjobber.com/features/scheduling/) y [Job Management](https://www.getjobber.com/features/jobs/).
 - **[F4] AWS.** [What is AWS Lambda?](https://docs.aws.amazon.com/lambda/latest/dg/welcome.html).
@@ -1725,6 +1705,6 @@ Las fuentes respaldan los requisitos del curso y las capacidades de las platafor
 - **[F14] Serverless Framework.** [AWS infrastructure resources](https://www.serverless.com/framework/docs/providers/aws/guide/resources).
 - **[F15] AWS.** [AWS::Amplify::App in CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-amplify-app.html).
 
-**Consulta inicial de documentación:** 27 de octubre de 2026. **Revisión académica y de alcance:** 29 de octubre de 2026. **Propuesta final:** 3 de noviembre de 2026. Antes de implementar, fijar las versiones y verificar las opciones disponibles en la cuenta autorizada del curso.
+Antes de implementar, fijar las versiones y verificar las opciones disponibles en la cuenta autorizada del curso.
 
 

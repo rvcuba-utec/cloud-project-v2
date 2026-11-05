@@ -1,6 +1,5 @@
 # Trazora FSM: plan de implementación (backend, infraestructura y pruebas)
 
-**Fecha del plan:** 3 de noviembre de 2026 (semana 13 de 16)
 **Basado en:** [`proposal.md`](proposal.md), [`aws-architecture.md`](aws-architecture.md), [`guidelines.md`](../guidelines/guidelines.md) y los 11 talleres de `materials/`
 **Fuera de alcance:** frontend, a cargo de otro integrante. La sección 4 define lo que el backend le entrega.
 
@@ -12,7 +11,7 @@ Cada decisión técnica lleva una etiqueta según su origen:
 |---|---|
 | **[CLASE]** | Se usa tal como se vio en los talleres. |
 | **[CLASE+]** | Parte de lo visto en clase, con un ajuste que se explica. |
-| **[NO EN MATERIALES]** | No aparece en `materials/`. Puede deberse a que se verá en las semanas 14-15, a que lo exige el enunciado o a que aporta una ventaja clara. |
+| **[NO EN MATERIALES]** | No aparece en `materials/`. Puede deberse a que se verá más adelante en el curso, a que lo exige el enunciado o a que aporta una ventaja clara. |
 
 "Taller N" se refiere al archivo `materials/N-*.pdf`; por ejemplo, el taller 4 es `4-serverless-1.pdf`.
 
@@ -20,28 +19,13 @@ Cuando lleguen nuevos talleres (SQS es el candidato más probable, porque el enu
 
 ---
 
-## 1. Situación actual y calendario
+## 1. Situación actual
 
-**El repositorio solo contiene documentos: todavía no hay código.** La propuesta (sección 16.1) preveía una base desplegada al 2 de noviembre, así que hay unos 4 días de retraso. Este calendario lo reemplaza para el backend.
-
-| Fechas | Fase | Resultado verificable |
-|---|---|---|
-| 3-4 nov | **F0** Verificación de AWS Academy y base del repositorio | Las 10 pruebas de la sección 5 pasan o tienen plan B. |
-| 4-6 nov | **F1** MS0 Usuarios y autorizador | Login de 2 tenants y una ruta protegida. |
-| 5-8 nov | **F2** MS1 Clientes, MS2 Técnicos, MS3 Órdenes (sin eventos) | Crear una orden que valida el cliente en otro servicio. |
-| 7-10 nov | **F3** MS4 Agenda | Reserva, reprogramación y cancelación con transacciones. |
-| 9-11 nov | **F4** MS5 Partes y S3 | Parte con evidencia real en S3. |
-| 10-13 nov | **F5** Eventos y MS6 Analítica | Un parte actualiza agenda, orden y métricas. Sugerencia de técnico. |
-| **14 nov** | **Hito oficial:** avance del 30 % con ACL (3 pts) | Recorrido E2E en stage `dev`, con pocos datos. |
-| 12-16 nov | **F6** Generador y carga masiva | Al menos 30 000 registros por servicio, con reporte de conteos. |
-| 15-18 nov | **F7** Endurecimiento y pruebas de fallos | Todos los casos de la sección 7 con evidencia. |
-| 18-21 nov | **F8** Documentación del backend y ensayo | Informe, diagramas actualizados y demo ensayada. |
-| **22 nov, 23:59** | **Hito oficial:** entrega en Canvas | |
-| Semana 16 | **Hito oficial:** exposición presencial | La inasistencia limita la nota a un máximo de 10. |
+**El repositorio solo contiene documentos: todavía no hay código.**
 
 **Peso en la rúbrica:** backend 8, diagrama 2 y avance 3. Es decir, 13 de 20 puntos dependen directa o parcialmente de este plan.
 
-Las fases se solapan a propósito: con el reparto de la propuesta (sección 16.2) varias personas trabajan en paralelo. La dependencia que no se puede saltar es **F0 → F1 → resto**, porque todos los servicios necesitan el autorizador y la librería común.
+Varias fases pueden avanzar en paralelo según el reparto de la propuesta (sección 16.1). La dependencia que no se puede saltar es **F0 → F1 → resto**, porque todos los servicios necesitan el autorizador y la librería común.
 
 ---
 
@@ -71,7 +55,7 @@ El taller de web scraping (9) no aporta funcionalidad a este proyecto, salvo la 
 
 | Elemento | ¿Por qué se necesita? | Origen |
 |---|---|---|
-| **SQS y fan-out SNS a SQS** | Lo exige el enunciado | Enunciado. Probablemente se vea en S14-15 |
+| **SQS y fan-out SNS a SQS** | Lo exige el enunciado | Enunciado. Probablemente se vea más adelante en el curso |
 | **Amplify Hosting** | Lo exige el enunciado | Enunciado. A cargo de frontend |
 | **`batch_writer` para la carga masiva** | Lo pidió el docente: Python y boto3 desde la MV | Indicación oral del docente |
 | **Colas de errores (DLQ)** y `ReportBatchItemFailures` | No perder mensajes que fallan | Diseño de la propuesta |
@@ -93,7 +77,7 @@ Todas estas decisiones tienen ventaja concreta. Si el docente prefiere la forma 
 |---|---|---|---|---|---|
 | 1 | Cada Lambda invoca `ValidarTokenAcceso` | **Lambda Authorizer** (ya decidido en la propuesta) | Una Lambda de negocio no puede olvidar la validación; el `tenant_id` llega desde un contexto confiable; hay caché | Configuración entre stacks | Patrón de clase, reutilizando la misma función `validar_token()` |
 | 2 | `integration: lambda`: `statusCode` en el cuerpo y HTTP siempre 200 | **Integración proxy** (la predeterminada del framework) | El frontend recibe 400/401/403/404/409 reales, como pide la sección 8.3 de la propuesta | `body` llega como texto y hay que parsearlo | Ninguno necesario |
-| 3 | Publicar en SNS directamente desde la Lambda | **Outbox + Streams** (propuesta, sección 12.4) | Si la Lambda falla entre guardar y publicar, el evento no se pierde | 3 Lambdas publicadoras y más configuración | `sns.publish` directo, como en el taller 10, si el 12 nov no funciona |
+| 3 | Publicar en SNS directamente desde la Lambda | **Outbox + Streams** (propuesta, sección 12.4) | Si la Lambda falla entre guardar y publicar, el evento no se pierde | 3 Lambdas publicadoras y más configuración | `sns.publish` directo, como en el taller 10, si no funciona |
 | 4 | `put_item` simple | **Transacciones y condiciones** | Dos personas no pueden reservar el mismo bloque | El doble de consumo de escritura | Sin plan B: es el núcleo de Agenda |
 | 5 | SNS invoca a Lambda | **SNS → SQS → Lambda** | Lo exige el enunciado; reintentos y DLQ | Política de cola y parseo adicional | Sin plan B: es obligatorio |
 | 6 | `print(event)` en logs | **Logs JSON de clase, sin imprimir el evento completo** | `event` contiene el token de `Authorization`, y la propuesta prohíbe registrarlo | Ninguno | |
@@ -157,11 +141,11 @@ Se entrega desde F1 y se mantiene actualizado:
 
 ---
 
-## 5. F0: verificación de AWS Academy y base del repositorio (3-4 nov)
+## 5. F0: verificación de AWS Academy y base del repositorio
 
 ### 5.1. Verificar el laboratorio antes de escribir código
 
-Varias piezas del diseño no se vieron en clase y **no hay garantía de que Academy las permita**. Esta prueba toma unas horas y evita descubrir un bloqueo el 12 de noviembre. Se hace con un stack desechable en la cuenta que se usará para la demo.
+Varias piezas del diseño no se vieron en clase y **no hay garantía de que Academy las permita**. Esta prueba evita descubrir un bloqueo cuando ya sea tarde. Se hace con un stack desechable en la cuenta que se usará para la demo.
 
 | # | Qué comprobar | Si falla |
 |---|---|---|
@@ -176,7 +160,7 @@ Varias piezas del diseño no se vieron en clase y **no hay garantía de que Acad
 | 9 | Límite de concurrencia: `aws lambda get-account-settings` | Limitar con `maximumConcurrency` en los consumidores |
 | 10 | Duración de la sesión y si la API sigue respondiendo con el laboratorio detenido | Iniciar el laboratorio antes de cada demo |
 
-**Dos riesgos operativos que hay que decidir hoy:**
+**Dos riesgos operativos que hay que decidir primero:**
 
 - **Una sola cuenta "dueña" del despliegue.** Cada alumno tiene su propia cuenta de Academy, así que los datos y las URLs de la demo viven en una sola. El equipo debe elegir cuál.
 - **Las credenciales duran 4 horas (taller 5).** Cada sesión empieza por actualizar `~/.aws/credentials`. La carga masiva debe poder reanudarse (F6) y la demo debe iniciarse con el laboratorio ya activo.
@@ -307,7 +291,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 ## 6. Implementación por fases
 
-### F1. MS0 Usuarios y autorizador (4-6 nov)
+### F1. MS0 Usuarios y autorizador
 
 **Es la pieza crítica:** todos los demás servicios dependen de ella.
 
@@ -327,7 +311,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 **Salida:** login de ClimaLima y FríoSur; el token de una empresa no sirve para operar en la otra; sin token responde 401. Pruebas de MS0 en verde.
 
-### F2. MS1 Clientes, MS2 Técnicos y MS3 Órdenes (5-8 nov)
+### F2. MS1 Clientes, MS2 Técnicos y MS3 Órdenes
 
 **MS1 Clientes**
 
@@ -348,7 +332,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 **Salida:** crear una orden con un cliente de otro tenant falla (tratado como 404); repetir una creación devuelve la misma orden.
 
-### F3. MS4 Agenda (7-10 nov)
+### F3. MS4 Agenda
 
 **Es el servicio con más riesgo técnico.** Conviene que `dominio/` sea código puro, para probarlo sin AWS.
 
@@ -372,7 +356,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 **Salida:** ejecutando 2 reservas simultáneas sobre AWS real, solo una se confirma; una reprogramación fallida conserva la reserva original.
 
-### F4. MS5 Partes y S3 (9-11 nov)
+### F4. MS5 Partes y S3
 
 1. Bucket privado declarado en `serverless.yml` [CLASE, taller 7]: bloqueo de acceso público, CORS y nombre `trazora-evidencias-${stage}-${aws:accountId}`.
 2. `POST /visitas/{id}/partes` y `PUT /partes/{id}`, validando en Agenda que la visita esté `EN_ATENCION` y asignada a ese técnico.
@@ -384,7 +368,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 **Salida:** subir una foto real, verla con una URL temporal y comprobar que un archivo de más de 5 MB se rechaza.
 
-### F5. Eventos y MS6 Analítica (10-13 nov)
+### F5. Eventos y MS6 Analítica
 
 **Infraestructura**
 
@@ -411,7 +395,7 @@ Serverless Compose [NO EN MATERIALES] haría esto mismo de forma declarativa, pe
 
 **Salida:** finalizar un parte actualiza visita, orden y métricas en segundos; el mismo mensaje enviado 2 veces no cambia los contadores; un mensaje inválido termina en la DLQ.
 
-### Hito del 14 de noviembre: avance del 30 %
+### Avance del 30 %
 
 El enunciado no define cómo se calcula ese porcentaje. Se propone mostrar:
 
@@ -421,14 +405,14 @@ El enunciado no define cómo se calcula ese porcentaje. Se propone mostrar:
 - Logs Insights filtrando por `tenant_id` [CLASE].
 - Diagrama actualizado y plan de carga.
 
-**Plan si el 12 de noviembre algo no funciona:** pasar a `sns.publish` directo (taller 10) y volver al outbox después de la exposición.
+**Plan si algo no funciona para el avance:** pasar a `sns.publish` directo (taller 10) y volver al outbox después de la exposición.
 
-### F6. Generador y carga masiva (12-16 nov)
+### F6. Generador y carga masiva
 
 **Requisito previo:** las claves y los GSI quedan **congelados** antes de la carga final. Cambiar una clave reemplaza la tabla y obliga a repetir la carga.
 
 1. `scripts/seed/cargar_datos.py` con `--stage`, `--seed`, `--escala`, `--dry-run` y `--solo <servicio>`.
-2. Pruebas progresivas: `--escala 0.01` el 12 nov y escala completa en `test` o `prod` el 15-16 nov.
+2. Pruebas progresivas: primero `--escala 0.01` y después escala completa en `test` o `prod`.
 3. Usar los mismos constructores de claves que el backend (`trazora_common`). Así el generador no se desincroniza y rellena también los atributos de los GSI.
 4. IDs deterministas, derivados de la semilla: se puede repetir la carga sin duplicar registros, lo que permite **reanudar** si la sesión de 4 horas termina a la mitad.
 5. Ejecutar en la MV Desarrollo con `batch_writer` [NO EN MATERIALES] y directo a DynamoDB, **sin API Gateway ni Lambda**, como pidió el docente. No generar ítems `OUTBOX`.
@@ -459,7 +443,7 @@ El enunciado no define cómo se calcula ese porcentaje. Se propone mostrar:
 
 **Salida:** tres tenants con el volumen exigido; la consola y el reporte coinciden.
 
-### F7. Endurecimiento (15-18 nov)
+### F7. Endurecimiento
 
 1. Ejecutar toda la matriz de la sección 7 con los datos completos.
 2. Comprobar que las listas responden paginadas con 30 000 registros y medir tiempos.
@@ -472,7 +456,7 @@ El enunciado no define cómo se calcula ese porcentaje. Se propone mostrar:
 6. Opcional: alarmas de CloudWatch sobre las DLQ [NO EN MATERIALES].
 7. Despliegue limpio: `deploy_all.sh` en un stage nuevo, para comprobar que es reproducible. Luego retirarlo con `sls remove` [CLASE, taller 7].
 
-### F8. Documentación del backend y ensayo (18-21 nov)
+### F8. Documentación del backend y ensayo
 
 1. **Diagrama de arquitectura (2 pts):** actualizar `.drawio`, `aws-architecture.md` y `proposal.md` con H1, H5, H6 y la notificación S3. Debe coincidir con lo desplegado.
 2. **Diseño de datos por microservicio:** estructura JSON, claves y patrones de acceso, en `docs/datos/`. El enunciado pide JSON para NoSQL; no hace falta diagrama entidad-relación.
@@ -493,7 +477,7 @@ El enunciado no define cómo se calcula ese porcentaje. Se propone mostrar:
 | **Componente** | pytest + moto [NO EN MATERIALES] | Handlers con eventos API Gateway simulados: aislamiento, permisos, idempotencia, transacciones, `INBOX` | En cada cambio |
 | **Arquitectura** | pytest | Revisar el código: ningún handler lee `tenant_id` del body, path o query; ningún servicio usa la tabla de otro | En cada cambio |
 | **Integración** | pytest contra stage `test` | AWS real: autorizador, SNS/SQS, Streams, S3, concurrencia con hilos | Al terminar cada fase |
-| **E2E** | pytest o Postman/`curl` [CLASE] | Recorrido completo con 2 tenants | Antes de cada hito |
+| **E2E** | pytest o Postman/`curl` [CLASE] | Recorrido completo con 2 tenants | Antes de cada entrega |
 
 **Por qué moto:** ofrece pruebas rápidas sin gastar créditos ni depender de la sesión de 4 horas. **Limitación:** no reproduce concurrencia real ni permisos de LabRole. Por eso la reserva concurrente y los flujos de eventos también se prueban sobre AWS.
 
@@ -540,12 +524,12 @@ GitHub Actions para ejecutar pytest en cada push [NO EN MATERIALES] es opcional:
 | Academy bloquea un servicio del diseño | Verificación de F0, con plan B para cada punto |
 | Sesión de 4 h durante una carga o la demo | Carga reanudable; iniciar el laboratorio con antelación |
 | La cuenta dueña queda inutilizable | Despliegue reproducible y carga repetible con semilla; probarlo en F7 |
-| Retraso de MS4 o de eventos | Lógica pura primero; plan B de publicación directa |
+| Complicaciones en MS4 o en eventos | Lógica pura primero; plan B de publicación directa |
 | Conflictos de transacción en contadores | Reintentos vía SQS y `maximumConcurrency` bajo |
-| Cambios de contrato que afecten a frontend | Colección de Postman actualizada y aviso; congelar los contratos tras el 14 nov |
+| Cambios de contrato que afecten a frontend | Colección de Postman actualizada y aviso; congelar los contratos tras el avance |
 | Nuevos talleres cambian lo esperado | Comparar cada taller nuevo con la sección 2 |
 
-**Si falta tiempo, recortar en este orden:**
+**Si hace falta, recortar en este orden:**
 
 1. Alarmas de CloudWatch y GitHub Actions.
 2. Script de recuperación automatizado (dejarlo documentado).
@@ -561,11 +545,11 @@ GitHub Actions para ejecutar pytest en cada push [NO EN MATERIALES] es opcional:
 
 ## 9. Preguntas para el docente o asistente
 
-Conviene hacerlas esta semana. Ninguna bloquea el inicio:
+Ninguna bloquea el inicio:
 
 1. ¿MS0 Usuarios también debe tener 30 000 registros? (El plan los carga de todos modos, como perfiles inactivos.)
 2. ¿Se aceptan el Lambda Authorizer y `TransactWriteItems`, aunque no aparezcan en los talleres?
-3. ¿Se verá SQS en las próximas semanas, y con qué patrón?
+3. ¿Se verá SQS más adelante, y con qué patrón?
 4. ¿Un solo repositorio cumple con "enlaces públicos a repositorios"?
 5. ¿Qué se espera exactamente en el avance del 30 %?
 6. ¿Amplify también debe desplegarse de forma automatizada, o solo el backend?
