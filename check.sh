@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Comprueba el sistema desplegado, sin desplegar nada.
+while [ $# -gt 0 ]; do case "$1" in --stage) export STAGE_CLI="$2"; shift 2 ;; *) shift ;; esac; done
+source "$(dirname "$0")/scripts/lib.sh"
+comprobar_entorno
+ERRORES=0
+for s in "${SERVICIOS[@]}"; do
+  [ -f "backend/$s/serverless.yml" ] || continue
+  u="$(url_servicio "$s")"
+  if [ -z "$u" ] || [ "$u" = None ]; then echo "FALLO  $s: no está desplegado"; ERRORES=$((ERRORES+1)); continue; fi
+  c="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$u/" || true)"
+  echo "OK     $s: $u (HTTP $c)"
+done
+APP="$(app_amplify)"
+if [ "$APP" != None ] && [ -n "$APP" ]; then
+  c="$(curl -s -o /dev/null -w '%{http_code}' "$(url_web "$APP")" || true)"
+  if [ "$c" = 200 ]; then echo "OK     web: $(url_web "$APP")"; else echo "FALLO  web: HTTP $c"; ERRORES=$((ERRORES+1)); fi
+fi
+[ -f tests/e2e/test_recorrido.py ] && { pytest -c /dev/null --rootdir=. tests/e2e -q || ERRORES=$((ERRORES+1)); }
+[ "$ERRORES" -eq 0 ] || fallo "$ERRORES comprobaciones fallaron."
+echo "Todas las comprobaciones pasaron."

@@ -59,8 +59,9 @@ La regla es no añadir servicios fuera de los materiales, salvo los que el enunc
 
 ```bash
 git clone <repositorio> && cd <repositorio>
-cp config.example.env config.env   # stage y org de Serverless
-serverless login                   # una vez por máquina
+./setup.sh                         # herramientas dentro del proyecto
+# Editar config.env: stage y org de Serverless
+npx serverless login               # una vez por máquina
 # Pegar las credenciales de AWS Academy en ~/.aws/credentials
 ./deploy.sh
 ```

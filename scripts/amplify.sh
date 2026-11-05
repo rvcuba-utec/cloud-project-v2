@@ -1,0 +1,50 @@
+# Publicación del frontend en Amplify Hosting, sin conexión a Git.
+REGLA_SPA='[{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
+RAMA=main
+
+preparar_amplify() {
+  APP_ID="$(app_amplify)"
+  if [ "$APP_ID" = "None" ] || [ -z "$APP_ID" ]; then
+    paso "Amplify: creando la aplicación"
+    APP_ID="$(aws amplify create-app --name "trazora-$STAGE" --platform WEB \
+      --custom-rules "$REGLA_SPA" --query 'app.appId' --output text)"
+    aws amplify create-branch --app-id "$APP_ID" --branch-name "$RAMA" >/dev/null
+  fi
+  ORIGEN_FRONTEND="$(url_web "$APP_ID")"
+}
+
+escribir_env_frontend() {
+  local s u archivo=frontend/.env.production
+  : > "$archivo"
+  for s in "${SERVICIOS[@]}"; do
+    u="$(url_servicio "$s")"
+    [ -n "$u" ] && [ "$u" != "None" ] && echo "VITE_API_$(echo "$s" | tr '[:lower:]' '[:upper:]')=$u" >> "$archivo"
+  done
+}
+
+publicar_frontend() {
+  paso "Frontend: compilando"
+  escribir_env_frontend
+  (cd frontend && npm install --silent --no-audit --no-fund && npm run build) || fallo "falló la compilación del frontend."
+  rm -f frontend/dist.zip
+  (cd frontend/dist && zip -qr ../dist.zip .)   # el contenido de dist, no la carpeta
+
+  paso "Frontend: publicando en Amplify"
+  local job url estado i
+  if ! read -r job url < <(aws amplify create-deployment --app-id "$APP_ID" --branch-name "$RAMA" \
+        --query '[jobId,zipUploadUrl]' --output text); then
+    fallo "la CLI no pudo publicar. Sube frontend/dist.zip en la consola de Amplify: app trazora-$STAGE, rama $RAMA."
+  fi
+  curl --fail -sS -T frontend/dist.zip "$url" || fallo "no se pudo subir el .zip a Amplify."
+  aws amplify start-deployment --app-id "$APP_ID" --branch-name "$RAMA" --job-id "$job" >/dev/null
+  for i in $(seq 1 60); do
+    estado="$(aws amplify get-job --app-id "$APP_ID" --branch-name "$RAMA" --job-id "$job" \
+      --query 'job.summary.status' --output text)"
+    case "$estado" in
+      SUCCEED) echo "Publicado: $(url_web "$APP_ID")"; return 0 ;;
+      FAILED|CANCELLED) fallo "Amplify terminó en estado $estado (trabajo $job)." ;;
+    esac
+    sleep 5
+  done
+  fallo "Amplify no terminó a tiempo (trabajo $job)."
+}

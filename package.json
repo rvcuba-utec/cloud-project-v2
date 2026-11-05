@@ -1,0 +1,8 @@
+{
+  "name": "trazora-fsm",
+  "private": true,
+  "description": "Herramientas de despliegue. El frontend tiene su propio package.json.",
+  "devDependencies": {
+    "serverless": "^4"
+  }
+}
