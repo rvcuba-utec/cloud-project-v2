@@ -36,8 +36,8 @@ Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el com
 ## Pruebas
 
 ```bash
-.venv/bin/python -m pytest      # backend, sin AWS
-(cd frontend && npm test)       # frontend
+./test.sh                  # backend y frontend, sin AWS
+scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
 ```
 
 ## Restricción de concurrencia

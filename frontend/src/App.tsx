@@ -1,8 +1,18 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import Plantilla from './components/Plantilla';
+import Inicio from './pages/Inicio';
+import Login from './pages/Login';
+
 export default function App() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center text-slate-800">
-      <h1 className="text-3xl font-semibold">Trazora FSM</h1>
-      <p className="mt-2 text-slate-600">Cada visita bajo control</p>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route element={<Plantilla />}>
+          <Route index element={<Inicio />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

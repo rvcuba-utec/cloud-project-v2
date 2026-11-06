@@ -16,6 +16,9 @@ if [ "$APP" != None ] && [ -n "$APP" ]; then
   c="$(curl -s -o /dev/null -w '%{http_code}' "$(url_web "$APP")" || true)"
   if [ "$c" = 200 ]; then echo "OK     web: $(url_web "$APP")"; else echo "FALLO  web: HTTP $c"; ERRORES=$((ERRORES+1)); fi
 fi
-[ -f tests/e2e/test_recorrido.py ] && { pytest -c /dev/null --rootdir=. tests/e2e -q || ERRORES=$((ERRORES+1)); }
+export STAGE
+if [ -f backend/usuarios/serverless.yml ] && [ -f .demo-credentials ]; then
+  python3 -m pytest tests/integracion -m "not muta" || ERRORES=$((ERRORES+1))
+fi
 [ "$ERRORES" -eq 0 ] || fallo "$ERRORES comprobaciones fallaron."
 echo "Todas las comprobaciones pasaron."
