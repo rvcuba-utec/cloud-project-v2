@@ -1,6 +1,7 @@
 # Secretos y configuración local
 config.env
 .demo-credentials
+.local-env/
 credentials
 .env
 .env.*

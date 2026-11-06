@@ -9,11 +9,13 @@ SaaS multitenant de gestión de servicios en campo, en AWS: serverless y basado 
 ## Despliegue
 
 ```bash
-./setup.sh                 # instala AWS CLI y Serverless dentro del proyecto
-# Edita config.env y pega las credenciales de Academy en ~/.aws/credentials
-npx serverless login       # una vez por máquina
+./setup.sh
+# 1. En config.env: SLS_ORG y SERVERLESS_ACCESS_KEY (app.serverless.com: Settings > Access Keys)
+# 2. Pegar las credenciales de AWS Academy en .local-env/home/.aws/credentials
 ./deploy.sh
 ```
+
+**Todo queda dentro del proyecto:** AWS CLI, Serverless, Python 3.12, cachés y credenciales están en `.local-env/`, `.venv/` y `node_modules/`, fuera de Git. No se escribe en `~/`. Para quitarlo: `./clean.sh`.
 
 | Comando | Qué hace |
 |---|---|
@@ -25,10 +27,11 @@ npx serverless login       # una vez por máquina
 | `./seed.sh --escala 0.01` | Carga una muestra de datos |
 | `./check.sh` | Comprueba el sistema sin desplegar |
 | `./warmup.sh` | Calienta las Lambdas antes de una demo |
-| `./destroy.sh` | Elimina un stage, pidiendo confirmación |
+| `./destroy.sh` | Elimina un stage en AWS, pidiendo confirmación |
+| `./clean.sh` | Borra las herramientas y credenciales locales; no toca AWS |
 | `scripts/verificar_cuenta.sh` | Comprueba que la cuenta admite el diseño, con recursos temporales |
 
-Si caducan las credenciales, pega las nuevas y repite el comando.
+Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el comando.
 
 ## Pruebas
 

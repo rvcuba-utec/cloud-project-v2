@@ -60,9 +60,8 @@ La regla es no añadir servicios fuera de los materiales, salvo los que el enunc
 ```bash
 git clone <repositorio> && cd <repositorio>
 ./setup.sh                         # herramientas dentro del proyecto
-# Editar config.env: stage y org de Serverless
-npx serverless login               # una vez por máquina
-# Pegar las credenciales de AWS Academy en ~/.aws/credentials
+# Editar config.env: SLS_ORG y SERVERLESS_ACCESS_KEY
+# Pegar las credenciales de AWS Academy en .local-env/home/.aws/credentials
 ./deploy.sh
 ```
 
@@ -103,6 +102,7 @@ Pruebas:   12/12 correctas
 - **Sin datos fijos de una cuenta:** el ID de cuenta, el rol y las URLs se obtienen automáticamente. Mover la demo a la cuenta de otro integrante es cambiar las credenciales y volver a ejecutar.
 - **Se puede repetir sin riesgo:** si falla, se corrige y se ejecuta otra vez; lo que ya está bien no se altera.
 - **Errores claros:** si falla, indica el paso y el servicio.
+- **Aislado:** las herramientas, cachés y credenciales quedan dentro del proyecto, sin escribir en `~/`. `./clean.sh` las borra.
 - **Funciona en la MV Desarrollo o en una laptop:** requiere `aws`, `node`, `npm`, `serverless` y `python3`. La carga final se ejecuta en la MV, como pidió el docente.
 - **Sin dependencias externas en las Lambdas:** no hay que instalar librerías con `pip` ni usar Docker o plugins.
 
@@ -171,8 +171,8 @@ pytest, moto y Vitest son herramientas locales: **no se despliegan ni añaden se
 
 **Qué necesito:**
 
-1. **Credenciales de AWS Academy en `~/.aws/credentials` de esta máquina**, pegadas por ustedes, no en el chat. Las usaré por CLI.
-2. **`serverless login`**, ejecutado por ustedes, porque abre el navegador.
+1. **Credenciales de AWS Academy en `.local-env/home/.aws/credentials`**, pegadas por ustedes, no en el chat. Las usaré por CLI.
+2. **`SLS_ORG` y `SERVERLESS_ACCESS_KEY` en `config.env`**, que queda fuera de Git.
 3. **Renovar las credenciales cuando caduquen.** Duran unas 4 horas: si caducan, me detengo y aviso.
 
 **Límites que voy a respetar:**

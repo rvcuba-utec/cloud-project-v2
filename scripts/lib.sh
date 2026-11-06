@@ -2,12 +2,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+# shellcheck disable=SC1091
+source "$ROOT/scripts/entorno.sh"
 [ -f config.env ] || { echo "ERROR: falta config.env. Ejecuta ./setup.sh primero." >&2; exit 1; }
 # shellcheck disable=SC1091
 source config.env
 STAGE="${STAGE_CLI:-${STAGE:-dev}}"
 export AWS_REGION="${REGION:-us-east-1}" AWS_DEFAULT_REGION="${REGION:-us-east-1}" SLS_ORG="${SLS_ORG:-}"
-export PATH="$ROOT/.venv/bin:$ROOT/node_modules/.bin:$PATH"
+[ -z "${SERVERLESS_ACCESS_KEY:-}" ] || export SERVERLESS_ACCESS_KEY
 
 # Orden con dependencias resueltas: cada servicio solo usa URLs de los anteriores.
 SERVICIOS=(usuarios clientes tecnicos analitica ordenes agenda partes)
@@ -21,11 +23,12 @@ comprobar_entorno() {
     command -v "$c" >/dev/null || fallo "falta '$c'. Ejecuta ./setup.sh."
   done
   [ "$SLS_ORG" != "cambiar-por-tu-org" ] && [ -n "$SLS_ORG" ] || fallo "define SLS_ORG en config.env."
+  [ -n "${SERVERLESS_ACCESS_KEY:-}" ] || [ -f "$HOME/.serverlessrc" ] || fallo "define SERVERLESS_ACCESS_KEY en config.env."
   local salida
   if ! salida="$(aws sts get-caller-identity --query Account --output text 2>&1)"; then
     case "$salida" in
-      *ExpiredToken*|*expired*) fallo "las credenciales de AWS Academy caducaron. Pega las nuevas en ~/.aws/credentials." ;;
-      *) fallo "no hay credenciales válidas de AWS: $salida" ;;
+      *ExpiredToken*|*expired*) fallo "las credenciales de AWS Academy caducaron. Pega las nuevas en $AWS_SHARED_CREDENTIALS_FILE" ;;
+      *) fallo "no hay credenciales válidas de AWS. Pégalas en $AWS_SHARED_CREDENTIALS_FILE ($salida)" ;;
     esac
   fi
   CUENTA="$salida"
