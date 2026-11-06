@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from conftest import http
+from apoyo import http
 
 ORIGEN = {"Origin": "https://main.ejemplo.amplifyapp.com"}
 
