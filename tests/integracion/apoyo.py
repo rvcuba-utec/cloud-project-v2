@@ -1,7 +1,10 @@
 """Cliente HTTP mínimo para las pruebas contra AWS."""
 import json
+import os
 import urllib.error
 import urllib.request
+
+import boto3
 
 
 def http(url, metodo="GET", token=None, cuerpo=None, cabeceras=None):
@@ -19,3 +22,8 @@ def http(url, metodo="GET", token=None, cuerpo=None, cabeceras=None):
         return estado, cab, json.loads(texto) if texto else None
     except ValueError:
         return estado, cab, None
+
+
+def url_servicio(servicio):
+    pila = boto3.client("cloudformation").describe_stacks(StackName=f"api-{servicio}-{os.environ.get('STAGE', 'dev')}")["Stacks"][0]
+    return next(s["OutputValue"] for s in pila["Outputs"] if s["OutputKey"] == "ServiceEndpoint")

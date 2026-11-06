@@ -1,0 +1,74 @@
+org: ${env:SLS_ORG}
+service: api-ordenes
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_ordenes
+    CLIENTES_URL: ${cf:api-clientes-${sls:stage}.ServiceEndpoint}
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/ordenes.crear
+    events:
+      - http: { path: ordenes, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/ordenes.listar
+    events:
+      - http: { path: ordenes, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/ordenes.detalle
+    events:
+      - http: { path: 'ordenes/{orden_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  actualizar:
+    handler: handlers/ordenes.actualizar
+    events:
+      - http: { path: 'ordenes/{orden_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  historial:
+    handler: handlers/ordenes.historial
+    events:
+      - http: { path: 'ordenes/{orden_id}/historial', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaOrdenes:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+            - { AttributeName: GSI2PK, AttributeType: S }
+            - { AttributeName: GSI2SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Órdenes por estado
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI2   # Órdenes por cliente
+              KeySchema:
+                - { AttributeName: GSI2PK, KeyType: HASH }
+                - { AttributeName: GSI2SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }

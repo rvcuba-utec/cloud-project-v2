@@ -1,0 +1,74 @@
+org: ${env:SLS_ORG}
+service: api-clientes
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_clientes
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/clientes.crear
+    events:
+      - http: { path: clientes, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/clientes.listar
+    events:
+      - http: { path: clientes, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/clientes.detalle
+    events:
+      - http: { path: 'clientes/{cliente_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  actualizar:
+    handler: handlers/clientes.actualizar
+    events:
+      - http: { path: 'clientes/{cliente_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  crearUbicacion:
+    handler: handlers/ubicaciones.crear
+    events:
+      - http: { path: 'clientes/{cliente_id}/ubicaciones', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listarUbicaciones:
+    handler: handlers/ubicaciones.listar
+    events:
+      - http: { path: 'clientes/{cliente_id}/ubicaciones', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalleUbicacion:
+    handler: handlers/ubicaciones.detalle
+    events:
+      - http: { path: 'clientes/{cliente_id}/ubicaciones/{ubicacion_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaClientes:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Clientes ordenados y buscables por nombre
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }

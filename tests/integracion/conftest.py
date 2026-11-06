@@ -1,18 +1,12 @@
 import os
 import pathlib
 
-import boto3
 import pytest
 
-from apoyo import http
+from apoyo import http, url_servicio
 
 RAIZ = pathlib.Path(__file__).resolve().parents[2]
 STAGE = os.environ.get("STAGE", "dev")
-
-
-def url_servicio(servicio):
-    pila = boto3.client("cloudformation").describe_stacks(StackName=f"api-{servicio}-{STAGE}")["Stacks"][0]
-    return next(s["OutputValue"] for s in pila["Outputs"] if s["OutputKey"] == "ServiceEndpoint")
 
 
 @pytest.fixture(scope="session")

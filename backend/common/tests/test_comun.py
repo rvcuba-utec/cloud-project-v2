@@ -116,6 +116,13 @@ def test_cuerpo_invalido_es_400(cuerpo):
     assert error.value.status == 400
 
 
+@pytest.mark.parametrize("valor", [["ALTA"], {"a": 1}, 1, None])
+def test_opcion_con_tipo_incorrecto_es_400(valor):
+    with pytest.raises(http.ApiError) as error:
+        http.opcion({"campo": valor}, "campo", {"ALTA"})
+    assert error.value.status == 400
+
+
 # ---- Logs
 def test_logs_ocultan_secretos(capsys):
     logs.info("login", tenant_id="T", datos={"password": "x1", "token": "x2", "email": "a@b"})
