@@ -16,7 +16,9 @@ provider:
     role: arn:aws:iam::${aws:accountId}:role/LabRole
   environment:
     TABLE_NAME: ${sls:stage}-t_ordenes
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
     CLIENTES_URL: ${cf:api-clientes-${sls:stage}.ServiceEndpoint}
+    AGENDA_BLOQUEO_FN: api-agenda-${sls:stage}-bloquearOrden
 
 package:
   patterns: ['!tests/**', '!**/__pycache__/**']
@@ -42,6 +44,15 @@ functions:
     handler: handlers/ordenes.historial
     events:
       - http: { path: 'ordenes/{orden_id}/historial', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+
+  cerrar:
+    handler: handlers/ordenes.cerrar
+    events:
+      - http: { path: 'ordenes/{orden_id}/cerrar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  cancelar:
+    handler: handlers/ordenes.cancelar
+    events:
+      - http: { path: 'ordenes/{orden_id}/cancelar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
 
 resources:
   - ${file(../serverless.common.yml):gatewayResponses}

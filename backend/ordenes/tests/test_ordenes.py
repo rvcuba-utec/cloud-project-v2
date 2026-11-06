@@ -142,3 +142,98 @@ def test_historial_registra_la_creacion():
     o = nueva()
     items = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None))["items"]
     assert [i["tipo"] for i in items] == ["ORDEN_CREADA"]
+
+
+# ---- Cierre y cancelación
+def _forzar_estado(orden, estado):
+    dynamo.tabla().update_item(
+        Key={"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{orden['orden_id']}"},
+        UpdateExpression="SET estado = :e, GSI1PK = :g",
+        ExpressionAttributeValues={":e": estado, ":g": f"TENANT#CLIMALIMA#ESTADO#{estado}"},
+    )
+
+
+def _guardada(orden):
+    return dynamo.tabla().get_item(Key={"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{orden['orden_id']}"})["Item"]
+
+
+@pytest.fixture
+def bloqueo(monkeypatch):
+    monkeypatch.setenv("AGENDA_BLOQUEO_FN", "agenda-bloqueo")
+    with mock.patch.object(ordenes, "_pedir_bloqueo", return_value={"bloqueada": True, "visitas_activas": 0}) as m:
+        yield m
+
+
+def test_cerrar_exige_pendiente_de_cierre(bloqueo):
+    o = nueva()
+    r = ordenes.cerrar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 409 and cuerpo(r)["error"]["codigo"] == "ESTADO_NO_PERMITE"
+    assert bloqueo.call_count == 0
+
+
+def test_cerrar_ok_y_repetir_es_seguro(bloqueo):
+    o = nueva()
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    ruta = {"orden_id": o["orden_id"]}
+    r = ordenes.cerrar(peticion(ctx(), ruta=ruta), None)
+    assert r["statusCode"] == 200 and cuerpo(r)["estado"] == "CERRADA"
+    assert ordenes.cerrar(peticion(ctx(), ruta=ruta), None)["statusCode"] == 200
+    assert bloqueo.call_count == 1
+    assert cuerpo(ordenes.listar(peticion(ctx(), query={"estado": "CERRADA"}), None))["items"]
+    assert not {"operacion_cierre", "destino_cierre"} & _guardada(o).keys()
+
+
+def test_cierre_rechazado_vuelve_al_estado_anterior(bloqueo):
+    bloqueo.return_value = {"bloqueada": False, "visitas_activas": 2}
+    o = nueva()
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    r = ordenes.cerrar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 409 and cuerpo(r)["error"]["detalle"]["visitas_activas"] == 2
+    assert _guardada(o)["estado"] == "PENDIENTE_DE_CIERRE"
+
+
+def test_fallo_de_comunicacion_conserva_operacion_y_reintenta_con_el_mismo_id(bloqueo):
+    bloqueo.side_effect = RuntimeError("sin respuesta")
+    o = nueva()
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    ruta = {"orden_id": o["orden_id"]}
+    r = ordenes.cerrar(peticion(ctx(), ruta=ruta), None)
+    assert r["statusCode"] == 503
+    guardada = _guardada(o)
+    assert guardada["estado"] == "CIERRE_EN_PROCESO"
+    primera = bloqueo.call_args.args[2]
+
+    bloqueo.side_effect = None
+    bloqueo.return_value = {"bloqueada": True, "visitas_activas": 0}
+    assert cuerpo(ordenes.cerrar(peticion(ctx(), ruta=ruta), None))["estado"] == "CERRADA"
+    assert bloqueo.call_args.args[2] == primera
+
+
+def test_cancelar_abierta(bloqueo):
+    o = nueva()
+    assert cuerpo(ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None))["estado"] == "CANCELADA"
+
+
+def test_cancelar_no_interfiere_con_cierre_en_curso(bloqueo):
+    bloqueo.side_effect = RuntimeError("x")
+    o = nueva()
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    ordenes.cerrar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert cuerpo(r)["error"]["codigo"] == "OPERACION_EN_CURSO"
+
+
+def test_cerrar_otra_empresa_404(bloqueo):
+    o = nueva()
+    assert ordenes.cerrar(peticion(ctx("FRIOSUR"), ruta={"orden_id": o["orden_id"]}), None)["statusCode"] == 404
+
+
+def test_tecnico_no_cierra(bloqueo):
+    o = nueva()
+    assert ordenes.cerrar(peticion(ctx(rol="TECNICO"), ruta={"orden_id": o["orden_id"]}), None)["statusCode"] == 403
+
+
+def test_outbox_pendiente_si_no_se_puede_publicar():
+    o = nueva()  # Sin TOPIC_ARN en este entorno: la orden se guarda y el evento queda pendiente.
+    pendientes = dynamo.consultar_todo(dynamo.tabla(), "TENANT#CLIMALIMA", "OUTBOX#")
+    assert [p["evento"]["aggregate_id"] for p in pendientes] == [o["orden_id"]]

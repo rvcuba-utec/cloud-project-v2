@@ -4,6 +4,8 @@ import { NOMBRE_ROL } from '../auth/roles';
 
 const ENLACES = [
   { a: '/ordenes', texto: 'Órdenes', roles: ['ADMIN', 'COORDINADOR'] },
+  { a: '/agenda', texto: 'Agenda', roles: ['ADMIN', 'COORDINADOR'] },
+  { a: '/mis-visitas', texto: 'Mis visitas', roles: ['TECNICO'] },
   { a: '/clientes', texto: 'Clientes', roles: ['ADMIN', 'COORDINADOR'] },
   { a: '/tecnicos', texto: 'Técnicos', roles: ['ADMIN', 'COORDINADOR'] },
 ];

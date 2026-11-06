@@ -1,12 +1,14 @@
+import json
 import os
 import uuid
 
+import boto3
 from botocore.exceptions import ClientError
 
-from trazora_common import dynamo, idempotencia, interno, logs
+from trazora_common import dynamo, eventos, idempotencia, interno, logs
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol, token_de_peticion
 from trazora_common.http import (
-    api_handler, conflicto, cuerpo_json, entrada_invalida, no_encontrado, opcion,
+    ApiError, api_handler, conflicto, cuerpo_json, entrada_invalida, no_encontrado, opcion,
     parametro_query, parametro_ruta, respuesta, texto,
 )
 
@@ -40,6 +42,7 @@ def crear(event, context):
     descripcion = texto(datos, "descripcion", 2000)
     tipo = opcion(datos, "tipo_servicio", TIPOS_SERVICIO)
     prioridad = opcion(datos, "prioridad", PRIORIDADES)
+    pendientes = []  # Evento de este intento; solo se publica si su transacción fue la que ganó.
 
     def construir():
         ubicacion = _validar_ubicacion(event, cliente_id, ubicacion_id)
@@ -63,10 +66,21 @@ def crear(event, context):
             "usuario_id": contexto.usuario_id, "ocurrido_en": ahora,
         }
         tabla = os.environ["TABLE_NAME"]
-        return [{"Put": {"TableName": tabla, "Item": item}}, {"Put": {"TableName": tabla, "Item": historial}}], dynamo.vista(item)
+        evento = eventos.crear_evento(
+            "OrdenCreada", contexto.tenant_id, "ORDEN", orden_id, 1,
+            {"orden_id": orden_id, "cliente_id": cliente_id, "creada_en": ahora}, correlation_id=orden_id,
+        )
+        pendientes[:] = [evento]
+        return [
+            {"Put": {"TableName": tabla, "Item": item}},
+            {"Put": {"TableName": tabla, "Item": historial}},
+            eventos.operacion_outbox(evento),
+        ], dynamo.vista(item)
 
     resultado = idempotencia.crear(event, contexto.pk, datos, construir)
-    logs.info("orden_creada", tenant_id=contexto.tenant_id, orden_id=resultado["orden_id"])
+    if pendientes and resultado["orden_id"] == pendientes[0]["aggregate_id"]:
+        eventos.publicar_y_borrar(pendientes[0])
+    logs.info("orden_creada", tenant_id=contexto.tenant_id, correlation_id=resultado["orden_id"])
     return respuesta(resultado, 201)
 
 
@@ -156,3 +170,121 @@ def historial(event, context):
         limite=parametro_query(event, "limit"), cursor=parametro_query(event, "cursor"),
     )
     return respuesta({"items": [dynamo.vista(i) for i in pagina["items"]], "next_cursor": pagina["next_cursor"]})
+
+
+def _cambiar_estado(contexto, orden, nuevo, extra_set=None, extra_valores=None, quitar=None):
+    """Operación que cambia el estado y mueve la orden en el índice por estado."""
+    asignaciones = ["estado = :nuevo", "GSI1PK = :gsi", "#v = :siguiente"] + list(extra_set or [])
+    expresion = "SET " + ", ".join(asignaciones)
+    if quitar:
+        expresion += " REMOVE " + ", ".join(quitar)
+    return {"Update": {
+        "TableName": os.environ["TABLE_NAME"],
+        "Key": {"PK": contexto.pk, "SK": sk_orden(orden["orden_id"])},
+        "UpdateExpression": expresion,
+        "ConditionExpression": "#v = :version",
+        "ExpressionAttributeNames": {"#v": "version"},
+        "ExpressionAttributeValues": {
+            ":nuevo": nuevo, ":gsi": particion_estado(contexto.tenant_id, nuevo),
+            ":version": orden["version"], ":siguiente": orden["version"] + 1, **(extra_valores or {}),
+        },
+    }}
+
+
+def _historial(contexto, orden_id, tipo, detalle):
+    ahora = dynamo.ahora_iso()
+    return {"Put": {"TableName": os.environ["TABLE_NAME"], "Item": {
+        "PK": contexto.pk, "SK": sk_historial(orden_id, ahora, uuid.uuid4().hex[:8]), "entity_type": "HISTORIAL",
+        "orden_id": orden_id, "tipo": tipo, "detalle": detalle, "usuario_id": contexto.usuario_id, "ocurrido_en": ahora,
+    }}}
+
+
+def _pedir_bloqueo(contexto, orden_id, operacion_id):
+    """H1: invocación directa, sin ruta pública ni dependencia circular de despliegue."""
+    respuesta_lambda = boto3.client("lambda").invoke(
+        FunctionName=os.environ["AGENDA_BLOQUEO_FN"],
+        Payload=json.dumps({"tenant_id": contexto.tenant_id, "orden_id": orden_id, "operacion_id": operacion_id}).encode(),
+    )
+    if respuesta_lambda.get("FunctionError"):
+        raise RuntimeError("Falló el bloqueo en Agenda")
+    return json.loads(respuesta_lambda["Payload"].read())
+
+
+def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
+    """Coordinación entre servicios, sin transacción compartida:
+    1. Registrar CIERRE_EN_PROCESO con un ID de operación. 2. Bloquear en Agenda. 3. Confirmar.
+    Si el resultado del paso 2 es desconocido, la orden sigue en proceso y se reintenta con el mismo ID."""
+    contexto = obtener_contexto(event)
+    requiere_rol(contexto, *GESTION)
+    orden_id = parametro_ruta(event, "orden_id")
+    tabla_ddb = dynamo.tabla()
+    clave = {"PK": contexto.pk, "SK": sk_orden(orden_id)}
+    orden = tabla_ddb.get_item(Key=clave, ConsistentRead=True).get("Item")
+    if not orden:
+        raise no_encontrado("Orden")
+    if orden["estado"] == destino:
+        return respuesta(dynamo.vista(orden))
+    if orden["estado"] in TERMINALES:
+        raise conflicto("ORDEN_TERMINADA", "La orden ya está cerrada o cancelada")
+
+    try:
+        if orden["estado"] == "CIERRE_EN_PROCESO":
+            if orden.get("destino_cierre") != destino:
+                raise conflicto("OPERACION_EN_CURSO", "Hay otra operación en curso sobre esta orden")
+            operacion_id = orden["operacion_cierre"]
+        else:
+            if orden["estado"] not in estados_permitidos:
+                raise conflicto("ESTADO_NO_PERMITE", "El estado de la orden no permite esta operación")
+            operacion_id = str(uuid.uuid4())
+            dynamo.transaccion([
+                _cambiar_estado(contexto, orden, "CIERRE_EN_PROCESO",
+                                ["operacion_cierre = :op", "destino_cierre = :d", "estado_previo = :p"],
+                                {":op": operacion_id, ":d": destino, ":p": orden["estado"]}),
+                _historial(contexto, orden_id, "CIERRE_SOLICITADO", detalle["solicitud"]),
+            ])
+            orden = tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"]
+    except dynamo.TransaccionCancelada:
+        raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
+
+    try:
+        resultado = _pedir_bloqueo(contexto, orden_id, operacion_id)
+    except Exception as error:
+        logs.error("bloqueo_desconocido", tenant_id=contexto.tenant_id, correlation_id=orden_id, tipo_error=type(error).__name__)
+        raise ApiError(503, "CIERRE_PENDIENTE", "No se pudo confirmar con Agenda. Intenta de nuevo.")
+
+    try:
+        if not resultado["bloqueada"]:
+            dynamo.transaccion([
+                _cambiar_estado(contexto, orden, orden["estado_previo"], quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
+                _historial(contexto, orden_id, "CIERRE_RECHAZADO", "Rechazado: quedan visitas activas"),
+            ])
+            raise conflicto("VISITAS_ACTIVAS", "Aún hay visitas programadas o en atención", visitas_activas=resultado["visitas_activas"])
+
+        ahora = dynamo.ahora_iso()
+        evento = eventos.crear_evento(
+            evento_tipo, contexto.tenant_id, "ORDEN", orden_id, int(orden["version"]) + 1,
+            {"orden_id": orden_id, "creada_en": orden["creada_en"], "terminada_en": ahora}, correlation_id=orden_id,
+        )
+        dynamo.transaccion([
+            _cambiar_estado(contexto, orden, destino, ["terminada_en = :t"], {":t": ahora}, quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
+            _historial(contexto, orden_id, evento_tipo.upper(), detalle["fin"]),
+            eventos.operacion_outbox(evento),
+        ])
+    except dynamo.TransaccionCancelada:
+        raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
+    eventos.publicar_y_borrar(evento)
+    logs.info(evento_tipo, tenant_id=contexto.tenant_id, correlation_id=orden_id)
+    return respuesta(dynamo.vista(tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"]))
+
+
+@api_handler
+def cerrar(event, context):
+    return _terminar(event, "CERRADA", {"PENDIENTE_DE_CIERRE"}, "OrdenCerrada",
+                     {"solicitud": "Cierre solicitado", "fin": "Orden cerrada"})
+
+
+@api_handler
+def cancelar(event, context):
+    permitidos = {"ABIERTA", "PROGRAMADA", "REQUIERE_REVISITA", "PENDIENTE_DE_CIERRE"}
+    return _terminar(event, "CANCELADA", permitidos, "OrdenCancelada",
+                     {"solicitud": "Cancelación solicitada", "fin": "Orden cancelada"})

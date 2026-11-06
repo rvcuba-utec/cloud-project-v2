@@ -117,4 +117,48 @@ export const ordenes = {
   cambiarPrioridad: (id: string, prioridad: Prioridad, version: number) =>
     api<Orden>('ordenes', `/ordenes/${id}`, { method: 'PATCH', body: { prioridad, version } }),
   historial: (id: string) => api<Pagina<EntradaHistorial>>('ordenes', `/ordenes/${id}/historial?limit=50`),
+  cerrar: (id: string) => api<Orden>('ordenes', `/ordenes/${id}/cerrar`, { method: 'POST' }),
+  cancelar: (id: string) => api<Orden>('ordenes', `/ordenes/${id}/cancelar`, { method: 'POST' }),
+};
+
+export type EstadoVisita = 'PROGRAMADA' | 'EN_ATENCION' | 'FINALIZADA' | 'CANCELADA';
+
+export interface Visita {
+  visita_id: string;
+  orden_id: string;
+  tecnico_id: string;
+  tecnico_nombre: string;
+  orden_descripcion: string;
+  cliente_nombre: string;
+  direccion: string;
+  distrito: string;
+  tipo_servicio: Especialidad;
+  inicio: string;
+  fin: string;
+  fecha: string;
+  estado: EstadoVisita;
+  numero_visita_orden: number;
+  version: number;
+}
+
+export interface OpcionTecnico {
+  tecnico_id: string;
+  nombre: string;
+  especialidades: Especialidad[];
+  horarios: string[];
+  justificacion?: string;
+}
+
+export const agenda = {
+  listar: (p: { fecha?: string; desde?: string; tecnico_id?: string; orden_id?: string; cursor?: string | null; limit?: number }) =>
+    api<Pagina<Visita>>('agenda', `/visitas${consulta(p)}`),
+  detalle: (id: string) => api<Visita>('agenda', `/visitas/${id}`),
+  disponibilidad: (p: { fecha: string; especialidad?: string; duracion_min: number; sugerir?: boolean }) =>
+    api<{ items: OpcionTecnico[] }>('agenda', `/disponibilidad${consulta({ ...p, sugerir: p.sugerir ? 'true' : undefined })}`),
+  programar: (datos: { orden_id: string; tecnico_id: string; inicio: string; fin: string }, idempotencyKey: string) =>
+    api<Visita>('agenda', '/visitas', { method: 'POST', body: datos, idempotencyKey }),
+  reprogramar: (id: string, datos: { inicio: string; fin: string; version: number; tecnico_id?: string }) =>
+    api<Visita>('agenda', `/visitas/${id}/reprogramar`, { method: 'POST', body: datos }),
+  cancelar: (id: string) => api<Visita>('agenda', `/visitas/${id}/cancelar`, { method: 'POST' }),
+  iniciar: (id: string) => api<Visita>('agenda', `/visitas/${id}/iniciar`, { method: 'POST' }),
 };

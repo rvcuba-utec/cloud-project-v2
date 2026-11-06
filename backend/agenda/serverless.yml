@@ -1,0 +1,95 @@
+org: ${env:SLS_ORG}
+service: api-agenda
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_agenda
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+    ORDENES_URL: ${cf:api-ordenes-${sls:stage}.ServiceEndpoint}
+    TECNICOS_URL: ${cf:api-tecnicos-${sls:stage}.ServiceEndpoint}
+    # Vacío hasta desplegar Analítica: Agenda funciona igual, sin justificación de métricas.
+    ANALITICA_URL: ${cf:api-analitica-${sls:stage}.ServiceEndpoint, ''}
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/visitas.crear
+    events:
+      - http: { path: visitas, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/visitas.listar
+    events:
+      - http: { path: visitas, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/visitas.detalle
+    events:
+      - http: { path: 'visitas/{visita_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  reprogramar:
+    handler: handlers/visitas.reprogramar
+    events:
+      - http: { path: 'visitas/{visita_id}/reprogramar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  cancelar:
+    handler: handlers/visitas.cancelar
+    events:
+      - http: { path: 'visitas/{visita_id}/cancelar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  iniciar:
+    handler: handlers/visitas.iniciar
+    events:
+      - http: { path: 'visitas/{visita_id}/iniciar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  disponibilidad:
+    handler: handlers/disponibilidad.consultar
+    events:
+      - http: { path: disponibilidad, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  bloquearOrden:   # Sin ruta: solo la invoca Órdenes con lambda.invoke (H1).
+    handler: handlers/control.bloquear
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaAgenda:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+            - { AttributeName: GSI2PK, AttributeType: S }
+            - { AttributeName: GSI2SK, AttributeType: S }
+            - { AttributeName: GSI3PK, AttributeType: S }
+            - { AttributeName: GSI3SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Visitas de un técnico
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI2   # Visitas de una orden
+              KeySchema:
+                - { AttributeName: GSI2PK, KeyType: HASH }
+                - { AttributeName: GSI2SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI3   # Visitas de un día, para la agenda del coordinador
+              KeySchema:
+                - { AttributeName: GSI3PK, KeyType: HASH }
+                - { AttributeName: GSI3SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }

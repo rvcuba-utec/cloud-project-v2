@@ -1,12 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import Plantilla from './components/Plantilla';
 import RutaPorRol from './components/RutaPorRol';
+import Agenda from './pages/Agenda';
 import Clientes from './pages/Clientes';
 import DetalleCliente from './pages/DetalleCliente';
 import DetalleOrden from './pages/DetalleOrden';
 import DetalleTecnico from './pages/DetalleTecnico';
 import Inicio from './pages/Inicio';
 import Login from './pages/Login';
+import MisVisitas from './pages/MisVisitas';
 import NuevaOrden from './pages/NuevaOrden';
 import Ordenes from './pages/Ordenes';
 import Tecnicos from './pages/Tecnicos';
@@ -26,6 +28,10 @@ export default function App() {
             <Route path="ordenes" element={<Ordenes />} />
             <Route path="ordenes/nueva" element={<NuevaOrden />} />
             <Route path="ordenes/:id" element={<DetalleOrden />} />
+            <Route path="agenda" element={<Agenda />} />
+          </Route>
+          <Route element={<RutaPorRol roles={['TECNICO']} />}>
+            <Route path="mis-visitas" element={<MisVisitas />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
