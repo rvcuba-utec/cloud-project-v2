@@ -18,7 +18,9 @@ escribir_env_frontend() {
   : > "$archivo"
   for s in "${SERVICIOS[@]}"; do
     u="$(url_servicio "$s")"
-    [ -n "$u" ] && [ "$u" != "None" ] && echo "VITE_API_$(echo "$s" | tr '[:lower:]' '[:upper:]')=$u" >> "$archivo"
+    if [ -n "$u" ] && [ "$u" != "None" ]; then
+      echo "VITE_API_$(echo "$s" | tr '[:lower:]' '[:upper:]')=$u" >> "$archivo"
+    fi
   done
 }
 
