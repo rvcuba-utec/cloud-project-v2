@@ -11,6 +11,13 @@ for s in "${SERVICIOS[@]}"; do
   c="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$u/" || true)"
   echo "OK     $s: $u (HTTP $c)"
 done
+APAGADOS="$(disparadores_apagados)"
+if [ -n "$APAGADOS" ]; then
+  echo "FALLO  eventos: consumidores deshabilitados ($(echo $APAGADOS | tr ' ' ',')). Ejecuta ./warmup.sh --stage $STAGE para reactivarlos."
+  ERRORES=$((ERRORES+1))
+else
+  echo "OK     eventos: los 3 consumidores SQS están activos"
+fi
 APP="$(app_amplify)"
 if [ "$APP" != None ] && [ -n "$APP" ]; then
   c="$(curl -s -o /dev/null -w '%{http_code}' "$(url_web "$APP")" || true)"

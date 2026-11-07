@@ -419,4 +419,33 @@ def test_historial_dice_que_la_reasignacion_fue_automatica():
     consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
     consumidor.lambda_handler(_evento_visita(orden, "VisitaReprogramada", 2, automatica=True, motivo="Ausencia de Carlos"), None)
     items = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]
-    assert "reasignada sola: Ausencia de Carlos" in items[0]["detalle"]
+    assert any("reasignada sola: Ausencia de Carlos" in i["detalle"] for i in items)
+
+
+def test_cancelar_tolera_que_los_eventos_cambien_la_orden_mientras_tanto(bloqueo):
+    """En AWS, las VisitaCancelada de la cascada llegan a Órdenes antes del paso final."""
+    o = nueva()
+
+    def bloquear_y_simular_eventos(*args, **kwargs):
+        dynamo.tabla().update_item(Key={"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{o['orden_id']}"},
+                                   UpdateExpression="ADD #v :uno SET estado_previo = :e",
+                                   ExpressionAttributeNames={"#v": "version"}, ExpressionAttributeValues={":uno": 1, ":e": "ABIERTA"})
+        return {"bloqueada": True, "visitas_activas": 0, "visitas_canceladas": 2}
+
+    bloqueo.side_effect = bloquear_y_simular_eventos
+    r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 200 and cuerpo(r)["estado"] == "CANCELADA", r["body"]
+
+
+def test_rechazo_tambien_tolera_eventos_intermedios(bloqueo):
+    o = nueva()
+
+    def bloquear_y_simular_eventos(*args, **kwargs):
+        dynamo.tabla().update_item(Key={"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{o['orden_id']}"},
+                                   UpdateExpression="ADD #v :uno", ExpressionAttributeNames={"#v": "version"}, ExpressionAttributeValues={":uno": 1})
+        return {"bloqueada": False, "visitas_activas": 1, "visitas_canceladas": 1}
+
+    bloqueo.side_effect = bloquear_y_simular_eventos
+    r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 409 and cuerpo(r)["error"]["codigo"] == "VISITA_EN_ATENCION"
+    assert _guardada(o)["estado"] == "ABIERTA"

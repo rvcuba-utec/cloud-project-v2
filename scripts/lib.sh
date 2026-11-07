@@ -54,3 +54,24 @@ app_amplify() {
 }
 
 url_web() { echo "https://main.$1.amplifyapp.com"; }
+
+# AWS Academy deshabilita los disparadores SQS -> Lambda al apagar el laboratorio, y CloudFormation
+# no lo corrige al volver a desplegar. Sin ellos los eventos se quedan en las colas.
+CONSUMIDORES=(ordenes agenda analitica)
+
+disparadores_apagados() {
+  local s uuid
+  for s in "${CONSUMIDORES[@]}"; do
+    for uuid in $(aws lambda list-event-source-mappings --function-name "api-$s-$STAGE-consumidor" \
+        --query "EventSourceMappings[?State!='Enabled'].UUID" --output text 2>/dev/null); do
+      [ "$uuid" = None ] || echo "$s:$uuid"
+    done
+  done
+}
+
+reactivar_disparadores() {
+  local par
+  for par in $(disparadores_apagados); do
+    aws lambda update-event-source-mapping --uuid "${par#*:}" --enabled >/dev/null && echo "Reactivado: consumidor de ${par%%:*}"
+  done
+}

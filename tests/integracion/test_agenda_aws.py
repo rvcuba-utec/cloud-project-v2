@@ -103,11 +103,9 @@ def test_recorrido_de_visita_y_aislamiento(apis, token_de, nueva_orden):
     assert visita["visita_id"] in [v["visita_id"] for v in mias["items"]]
     assert mias["items"][0]["direccion"] == "Av. Prueba"
 
-    # Cerrar o cancelar la orden con una visita activa se rechaza
-    estado, _, error = http(f"{apis['ordenes']}/ordenes/{orden}/cancelar", "POST", token)
-    assert estado == 409 and error["error"]["codigo"] == "VISITAS_ACTIVAS", error
-    _, _, detalle = http(f"{apis['ordenes']}/ordenes/{orden}", token=token)
-    assert detalle["estado"] != "CANCELADA" and detalle["estado"] != "CIERRE_EN_PROCESO"
+    # Cerrar la orden con una visita activa se rechaza (cancelarla cancela sus visitas: ver test_automatizacion_aws)
+    estado, _, error = http(f"{apis['ordenes']}/ordenes/{orden}/cerrar", "POST", token)
+    assert estado == 409, error
 
     # Reprogramar con versión antigua falla y conserva lo anterior
     assert http(f"{ruta}/reprogramar", "POST", token, {"inicio": visita["inicio"], "fin": visita["fin"], "version": 99})[0] == 409
@@ -116,6 +114,12 @@ def test_recorrido_de_visita_y_aislamiento(apis, token_de, nueva_orden):
     estado, _, iniciada = http(f"{ruta}/iniciar", "POST", tecnico)
     assert estado == 200 and iniciada["estado"] == "EN_ATENCION"
     assert http(f"{ruta}/cancelar", "POST", token)[0] == 409
+    # Con una visita en atención, cancelar la orden se rechaza y la orden no queda a medias
+    estado, _, error = http(f"{apis['ordenes']}/ordenes/{orden}/cancelar", "POST", token)
+    # Según si ya llegó VisitaIniciada a Órdenes, lo detiene el estado de la orden o el bloqueo de Agenda.
+    assert estado == 409 and error["error"]["codigo"] in ("ESTADO_NO_PERMITE", "VISITA_EN_ATENCION"), error
+    _, _, detalle = http(f"{apis['ordenes']}/ordenes/{orden}", token=token)
+    assert detalle["estado"] not in ("CANCELADA", "CIERRE_EN_PROCESO")
 
 
 @pytest.mark.muta

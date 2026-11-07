@@ -2,6 +2,8 @@
 # Una petición secuencial por API, para evitar arranques en frío durante la demo.
 while [ $# -gt 0 ]; do case "$1" in --stage) export STAGE_CLI="$2"; shift 2 ;; *) shift ;; esac; done
 source "$(dirname "$0")/scripts/lib.sh"
+comprobar_entorno
+reactivar_disparadores   # Tras reiniciar el laboratorio de Academy, siempre.
 ARGS=()
 for s in "${SERVICIOS[@]}"; do
   u="$(url_servicio "$s")"

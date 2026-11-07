@@ -21,6 +21,7 @@ from dominio.ordenes import (
 GESTION = (ADMIN, COORDINADOR)
 ESTADOS_MAPA = ("ABIERTA", "REQUIERE_REVISITA", "PROGRAMADA", "EN_ATENCION", "PENDIENTE_DE_CIERRE", "CIERRE_EN_PROCESO")
 MAX_POR_ESTADO = 400
+INTENTOS_FINALES = 4
 DIAS_CERRADAS_MAPA = 14
 
 
@@ -264,29 +265,39 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
         logs.error("bloqueo_desconocido", tenant_id=contexto.tenant_id, correlation_id=orden_id, tipo_error=type(error).__name__)
         raise ApiError(503, "CIERRE_PENDIENTE", "No se pudo confirmar con Agenda. Intenta de nuevo.")
 
-    try:
-        if not resultado["bloqueada"]:
-            dynamo.transaccion([
-                _cambiar_estado(contexto, orden, orden["estado_previo"], quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
-                _historial(contexto, orden_id, "CIERRE_RECHAZADO", "Rechazado: quedan visitas activas"),
-            ])
-            if destino == "CANCELADA":
-                raise conflicto("VISITA_EN_ATENCION", "Hay una visita en atención: termínala antes de cancelar la orden",
-                                visitas_activas=resultado["visitas_activas"], visitas_canceladas=resultado.get("visitas_canceladas", 0))
-            raise conflicto("VISITAS_ACTIVAS", "Aún hay visitas programadas o en atención", visitas_activas=resultado["visitas_activas"])
+    # Mientras Agenda bloqueaba (y, al cancelar, cancelaba visitas), los eventos de esas visitas pudieron
+    # actualizar la orden. Se relee antes de cada intento: la operación sigue siendo la misma.
+    for intento in range(INTENTOS_FINALES):
+        orden = tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"]
+        if orden["estado"] != "CIERRE_EN_PROCESO" or orden.get("operacion_cierre") != operacion_id:
+            if orden["estado"] == destino:
+                return respuesta({**dynamo.vista(orden), "visitas_canceladas": resultado.get("visitas_canceladas", 0)})
+            raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
+        try:
+            if not resultado["bloqueada"]:
+                dynamo.transaccion([
+                    _cambiar_estado(contexto, orden, orden["estado_previo"], quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
+                    _historial(contexto, orden_id, "CIERRE_RECHAZADO", "Rechazado: quedan visitas activas"),
+                ])
+                if destino == "CANCELADA":
+                    raise conflicto("VISITA_EN_ATENCION", "Hay una visita en atención: termínala antes de cancelar la orden",
+                                    visitas_activas=resultado["visitas_activas"], visitas_canceladas=resultado.get("visitas_canceladas", 0))
+                raise conflicto("VISITAS_ACTIVAS", "Aún hay visitas programadas o en atención", visitas_activas=resultado["visitas_activas"])
 
-        ahora = dynamo.ahora_iso()
-        evento = eventos.crear_evento(
-            evento_tipo, contexto.tenant_id, "ORDEN", orden_id, int(orden["version"]) + 1,
-            {"orden_id": orden_id, "creada_en": orden["creada_en"], "terminada_en": ahora}, correlation_id=orden_id,
-        )
-        dynamo.transaccion([
-            _cambiar_estado(contexto, orden, destino, ["terminada_en = :t"], {":t": ahora}, quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
-            _historial(contexto, orden_id, evento_tipo.upper(), detalle["fin"]),
-            eventos.operacion_outbox(evento),
-        ])
-    except dynamo.TransaccionCancelada:
-        raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
+            ahora = dynamo.ahora_iso()
+            evento = eventos.crear_evento(
+                evento_tipo, contexto.tenant_id, "ORDEN", orden_id, int(orden["version"]) + 1,
+                {"orden_id": orden_id, "creada_en": orden["creada_en"], "terminada_en": ahora}, correlation_id=orden_id,
+            )
+            dynamo.transaccion([
+                _cambiar_estado(contexto, orden, destino, ["terminada_en = :t"], {":t": ahora}, quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
+                _historial(contexto, orden_id, evento_tipo.upper(), detalle["fin"]),
+                eventos.operacion_outbox(evento),
+            ])
+            break
+        except dynamo.TransaccionCancelada:
+            if intento == INTENTOS_FINALES - 1:
+                raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
     eventos.publicar_y_borrar(evento)
     logs.info(evento_tipo, tenant_id=contexto.tenant_id, correlation_id=orden_id)
     final = dynamo.vista(tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"])
