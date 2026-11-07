@@ -222,3 +222,31 @@ export const partes = {
   confirmarEvidencia: (evidenciaId: string) =>
     api<{ evidencia_id: string; estado: EstadoEvidencia }>('partes', `/evidencias/${evidenciaId}/confirmar`, { method: 'POST' }),
 };
+
+export interface ResumenMes {
+  periodo: string;
+  ordenes_creadas: number;
+  ordenes_abiertas: number;
+  ordenes_cerradas: number;
+  ordenes_canceladas: number;
+  visitas_programadas: number;
+  visitas_completadas: number;
+  tiempo_promedio_cierre_dias?: number;
+}
+
+export interface MetricasTecnico {
+  tecnico_id: string;
+  carga_dia: number;
+  completadas_dia: number;
+  visitas_completadas_total: number;
+  revisitas_generadas: number;
+  tasa_resolucion?: number;
+  tiempo_promedio_min?: number;
+}
+
+export const analitica = {
+  dashboard: (periodo: string) =>
+    api<ResumenMes & { historico: ResumenMes[] }>('analitica', `/analitica/dashboard${consulta({ periodo })}`),
+  tecnicos: (fecha: string) =>
+    api<{ fecha: string; items: MetricasTecnico[] }>('analitica', `/analitica/tecnicos${consulta({ fecha })}`),
+};

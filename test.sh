@@ -4,7 +4,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 source scripts/entorno.sh
 FALLOS=0
-for d in backend/common backend/usuarios backend/clientes backend/tecnicos backend/analitica backend/ordenes backend/agenda backend/partes; do
+for d in backend/common backend/usuarios backend/clientes backend/tecnicos backend/analitica backend/ordenes backend/agenda backend/partes scripts/seed; do
   [ -d "$d/tests" ] || continue
   echo "== $d"; python -m pytest "$d/tests" || FALLOS=1
 done

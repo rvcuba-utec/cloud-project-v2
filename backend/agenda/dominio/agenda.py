@@ -132,9 +132,11 @@ def ordenar_candidatos(candidatos, metricas):
     for candidato in ordenados:
         m = metricas.get(candidato["tecnico_id"])
         if m:
-            tasa = round(m.get("tasa_resolucion", 0) * 100)
             carga = m.get("carga_dia", 0)
-            candidato = {**candidato, "justificacion": f"{carga} visitas hoy, {tasa} % de resolución sin revisita"}
+            visitas = "1 visita" if carga == 1 else f"{carga} visitas"
+            tasa = m.get("tasa_resolucion")
+            detalle = "sin historial" if tasa is None else f"{round(tasa * 100)} % de resolución sin revisita"
+            candidato = {**candidato, "justificacion": f"{visitas} ese día, {detalle}"}
         resultado.append(candidato)
     return resultado
 

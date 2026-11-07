@@ -6,6 +6,10 @@ export function fechaHora(iso: string): string {
   return new Intl.DateTimeFormat('es-PE', { dateStyle: 'short', timeStyle: 'short', timeZone: ZONA }).format(new Date(iso));
 }
 
+export function porcentaje(tasa: number): string {
+  return `${Math.round(tasa * 100)} %`;
+}
+
 export function hoyLima(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date());
 }

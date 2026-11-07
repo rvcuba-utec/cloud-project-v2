@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { NOMBRE_ROL } from '../auth/roles';
 
 const ENLACES = [
+  { a: '/panel', texto: 'Panel', roles: ['ADMIN', 'COORDINADOR'] },
   { a: '/ordenes', texto: 'Órdenes', roles: ['ADMIN', 'COORDINADOR'] },
   { a: '/agenda', texto: 'Agenda', roles: ['ADMIN', 'COORDINADOR'] },
   { a: '/mis-visitas', texto: 'Mis visitas', roles: ['TECNICO'] },

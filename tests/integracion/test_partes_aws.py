@@ -19,7 +19,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"0" * 2048 + b"\xff\xd9"
 
 @pytest.fixture(scope="module")
 def apis():
-    return {s: url_servicio(s) for s in ("clientes", "ordenes", "agenda", "partes")}
+    return {s: url_servicio(s) for s in ("clientes", "ordenes", "agenda", "partes", "analitica")}
 
 
 def utc(fecha, hora):
@@ -87,10 +87,16 @@ def esperar(funcion, segundos=60):
         time.sleep(2)
 
 
+def metricas_demo(apis, token):
+    _, _, datos = http(f"{apis['analitica']}/analitica/tecnicos", token=token)
+    return next((m for m in datos["items"] if m["tecnico_id"] == TECNICO), {})
+
+
 @pytest.mark.muta
 def test_atencion_completa_con_foto(apis, token_de, nueva_visita):
     tecnico, admin = token_de("CLIMALIMA", "TECNICO"), token_de("CLIMALIMA")
     visita_id = nueva_visita(dias=21)["visita_id"]
+    antes = metricas_demo(apis, admin).get("visitas_completadas_total", 0)
     url = apis["partes"]
 
     estado, _, parte = http(f"{url}/visitas/{visita_id}/partes", "POST", tecnico)
@@ -157,6 +163,8 @@ def test_atencion_completa_con_foto(apis, token_de, nueva_visita):
     _, _, historial = http(f"{ruta_orden}/historial", token=admin)
     tipos = [h["tipo"] for h in historial["items"]]
     assert {"VisitaCompletada", "PARTE_FINALIZADO"} <= set(tipos), tipos
+
+    assert esperar(lambda: metricas_demo(apis, admin).get("visitas_completadas_total", 0) == antes + 1), "Analítica no contó la visita"
 
     estado, _, cerrada = http(f"{ruta_orden}/cerrar", "POST", admin)
     assert estado == 200 and cerrada["estado"] == "CERRADA", cerrada

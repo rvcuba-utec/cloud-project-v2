@@ -13,6 +13,7 @@ import Login from './pages/Login';
 import MisVisitas from './pages/MisVisitas';
 import NuevaOrden from './pages/NuevaOrden';
 import Ordenes from './pages/Ordenes';
+import Panel from './pages/Panel';
 import Tecnicos from './pages/Tecnicos';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
         <Route element={<Plantilla />}>
           <Route index element={<Inicio />} />
           <Route element={<RutaPorRol roles={['ADMIN', 'COORDINADOR']} />}>
+            <Route path="panel" element={<Panel />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="clientes/:id" element={<DetalleCliente />} />
             <Route path="tecnicos" element={<Tecnicos />} />

@@ -115,7 +115,13 @@ def test_orden_de_candidatos_y_justificacion():
     m = {"A": {"carga_dia": 1, "tasa_resolucion": 0.9}, "B": {"carga_dia": 3, "tasa_resolucion": 1}, "C": {"carga_dia": 1, "tasa_resolucion": 0.95}}
     r = dom.ordenar_candidatos(c, m)
     assert [x["tecnico_id"] for x in r] == ["C", "A", "B"]
-    assert r[0]["justificacion"] == "1 visitas hoy, 95 % de resolución sin revisita"
+    assert r[0]["justificacion"] == "1 visita ese día, 95 % de resolución sin revisita"
+
+
+def test_tecnico_sin_historial_lo_dice_en_vez_de_mostrar_cero():
+    candidatos = [{"tecnico_id": "A", "nombre": "Ana", "horarios": []}]
+    r = dom.ordenar_candidatos(candidatos, {"A": {"tecnico_id": "A", "carga_dia": 2}})
+    assert r[0]["justificacion"] == "2 visitas ese día, sin historial"
 
 
 def test_sin_metricas_orden_alfabetico_sin_justificacion():
