@@ -28,7 +28,7 @@ Un MS «no está encendido»: sus Lambdas se ejecutan solo cuando llega una peti
 | Color | Tipo | Cómo se activa |
 |---|---|---|
 | Naranja | Lambda **HTTP** | Una petición que llega a la API Gateway del MS. |
-| Rosa | Lambda **de evento** | Un mensaje en SQS o un cambio en DynamoDB Streams. Nadie la llama directamente. |
+| Rosa | Lambda **de evento** | Un mensaje en SQS, una notificación de S3 o una regla de EventBridge. Nadie la llama directamente. |
 | Azul claro | Lambda **interna** | La llama otro servicio por HTTPS, o la usa la API Gateway (`authorizer`). No la usa el frontend. |
 
 ### Líneas
@@ -39,7 +39,7 @@ Un MS «no está encendido»: sus Lambdas se ejecutan solo cuando llega una peti
 | **Azul punteada** | Llamada **síncrona** de un servicio a la API de otro | **Sí**, el llamador espera |
 | **Rosa continua** | **Evento** hacia/desde SNS y SQS | **No**, es asíncrono |
 | Morada/azul oscura | Lectura/escritura a DynamoDB | Sí |
-| Verde | S3 (URL prefirmada) | — |
+| Verde | S3 (formulario y URL firmados) | — |
 | Gris punteada | Carga masiva de datos desde la MV | — |
 
 **Diferencia clave:** una *solicitud* pide hacer algo y devuelve respuesta («reserva esta visita»). Un *evento* informa algo que ya ocurrió («esta visita fue programada») y el emisor no espera nada.
@@ -60,9 +60,9 @@ Excepción: en MS0, `POST /auth/login` es público, y sus demás rutas validan e
 
 ## 4. Los siete microservicios
 
-| MS | Responsabilidad | Tabla(s) | Streams | Consume cola | Publica eventos |
+| MS | Responsabilidad | Tabla(s) | Barrido | Consume cola | Publica eventos |
 |---|---|---|:-:|---|:-:|
-| **MS0** Usuarios | Login, usuarios, roles, sesiones, authorizer | `t_usuarios`, `t_sesiones` (TTL) | No | — | No |
+| **MS0** Usuarios | Login, usuarios, roles, sesiones, authorizer | `t_usuarios`, `t_sesiones` | No | — | No |
 | **MS1** Clientes | Clientes y ubicaciones | `t_clientes` | No | — | No |
 | **MS2** Técnicos | Técnicos, jornadas, ausencias | `t_tecnicos` | No | — | No |
 | **MS3** Órdenes | Órdenes de trabajo y su historial | `t_ordenes` | Sí | `q-ordenes` | Sí |
@@ -103,8 +103,8 @@ Guardar un cambio y avisar a otros servicios son dos acciones distintas; si la s
 ### Recorrido completo de un evento
 
 1. Una Lambda HTTP de negocio guarda el cambio **y** un registro `OUTBOX` en la misma transacción de su tabla.
-2. **DynamoDB Streams** detecta el registro nuevo y activa la Lambda **publicadora** del MS.
-3. La publicadora lo envía al tema **SNS `fsm-eventos`**, con `event_type` como atributo.
+2. La misma Lambda publica el evento y borra el registro. Si la publicación falla, **`barrerOutbox`**, programada con EventBridge cada 5 minutos, lo reenvía.
+3. El evento llega al tema **SNS `fsm-eventos`**, con `event_type` como atributo.
 4. SNS entrega **una copia a cada cola cuyo filtro coincida**.
 5. **SQS** conserva el mensaje. Una Lambda **consumidora** lo procesa (*event source mapping*).
 6. La consumidora guarda en su tabla una marca `INBOX` con el `event_id` y el cambio, **en la misma transacción**. Si el mensaje llega repetido, lo detecta y no duplica el efecto.
@@ -122,7 +122,7 @@ Guardar un cambio y avisar a otros servicios son dos acciones distintas; si la s
 |---|---|---|
 | `q-agenda` | `ParteFinalizado` | MS4 Agenda → finaliza la visita |
 | `q-ordenes` | `VisitaProgramada`, `VisitaReprogramada`, `VisitaIniciada`, `VisitaCancelada`, `VisitaCompletada`, `ParteFinalizado` | MS3 Órdenes → actualiza historial y resumen |
-| `q-analitica` | `VisitaProgramada`, `VisitaReprogramada`, `VisitaCancelada`, `VisitaCompletada`, `ParteFinalizado`, `OrdenCreada`, `OrdenCerrada`, `OrdenCancelada` | MS6 Analítica → actualiza contadores |
+| `q-analitica` | `VisitaProgramada`, `VisitaReprogramada`, `VisitaCancelada`, `VisitaCompletada`, `OrdenCreada`, `OrdenCerrada`, `OrdenCancelada` | MS6 Analítica → actualiza contadores |
 
 Cada consumidor tiene su propia cola porque dos Lambdas que comparten una cola no reciben una copia cada una.
 
@@ -130,9 +130,9 @@ Cada consumidor tiene su propia cola porque dos Lambdas que comparten una cola n
 
 1. El técnico llama `POST /partes/{id}/finalizar` → Lambda `finalizarParte` (MS5).
 2. Guarda el parte `FINALIZADO` + `OUTBOX` en `t_partes`.
-3. Streams activa la `publicadora` de MS5 → publica `ParteFinalizado` en SNS.
+3. `finalizarParte` publica `ParteFinalizado` en SNS.
 4. SNS lo copia a `q-agenda`, `q-ordenes` y `q-analitica`.
-5. MS4 marca la visita `FINALIZADA` y su publicadora emite `VisitaCompletada`.
+5. MS4 marca la visita `FINALIZADA` y emite `VisitaCompletada`.
 6. SNS reparte `VisitaCompletada` a `q-ordenes` y `q-analitica`.
 7. MS3 actualiza la orden y MS6 actualiza las métricas.
 
@@ -141,9 +141,9 @@ Cada consumidor tiene su propia cola porque dos Lambdas que comparten una cola n
 ## 7. S3 y evidencias
 
 - El bucket es privado. El navegador **no** tiene credenciales de AWS.
-- MS5 (`solicitarEvidencia`) genera una **URL prefirmada** temporal. El navegador sube o descarga el archivo directo a S3 con ella.
+- MS5 (`solicitarEvidencia`) genera un **formulario `POST` firmado**, y S3 rechaza lo que supere 5 MB. Para leer, `getParte` entrega URLs temporales.
 - `confirmarEvidencia` verifica que el objeto existe; solo entonces la evidencia figura como disponible.
-- El bucket necesita CORS para `PUT` y `GET` desde el dominio de Amplify.
+- El bucket necesita CORS para `POST` y `GET` desde el dominio de Amplify. Al llegar el archivo, `onEvidenciaSubida` confirma la evidencia.
 - Ruta del objeto: `tenants/<tenant>/ordenes/<orden>/visitas/<visita>/<evidencia>`. La ruta por sí sola no da acceso.
 
 ---
@@ -165,7 +165,7 @@ Cada consumidor tiene su propia cola porque dos Lambdas que comparten una cola n
 | **Repositorio Git** | Contiene un `serverless.yml` por servicio. |
 | **Serverless Framework → CloudFormation** | `serverless deploy` crea APIs, Lambdas, tablas, SNS/SQS y roles. |
 | **Amplify** | Compila y publica el React en cada push. |
-| **CloudWatch** | Logs y métricas de las Lambdas; alarmas sobre las DLQ. |
+| **CloudWatch** | Logs y métricas de las Lambdas. |
 | **IAM** | Un rol por Lambda con mínimo privilegio. En AWS Academy puede estar limitado a `LabRole`; hay que verificarlo. |
 
 ---

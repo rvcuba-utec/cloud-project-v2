@@ -303,15 +303,15 @@ La vista omite las conexiones entre servicios, los archivos y los eventos para m
 | S3 | Fotografías y documentos. | Guarda los archivos adjuntos. |
 | SNS | Publicar y distribuir eventos. | Envía el aviso a las áreas interesadas. |
 | SQS | Colas de mensajes por consumidor. | Mantiene pendientes hasta que se procesen. |
-| DynamoDB Streams | Disparar la publicación de cambios persistidos. | Detecta que hay un aviso nuevo por enviar. |
+| EventBridge | Programar el reenvío de eventos pendientes. | Cada 5 minutos revisa si quedó algún aviso sin enviar. |
 | CloudWatch | Registros y métricas de operación. | Ayuda a comprobar qué pasó cuando algo falla. |
-| IAM | Roles de ejecución de las Lambdas. | Define a qué tablas, colas y objetos accede cada función. |
+| IAM | `LabRole`, el rol disponible en AWS Academy. | Es el rol de ejecución de todas las Lambdas; la separación entre servicios se aplica por código y variables de entorno, y una prueba de arquitectura la comprueba. |
 | EC2 (MV de carga) | Ejecutar el script de carga masiva. | Máquina temporal desde la que Python/boto3 escribe en DynamoDB; no forma parte de la aplicación en ejecución. |
 | Serverless Framework | Desplegar la infraestructura declarada. | Crea y actualiza los recursos a partir de configuración versionada. |
 
-Amplify admite React y despliegue vinculado con Git. [F5] S3 se utilizará para objetos, mientras que los metadatos de cada archivo pertenecerán al servicio de Partes. [F6]
+Amplify Hosting publica la web de React con un `.zip` por CLI, sin conexión a Git. [F5] S3 se utilizará para objetos, mientras que los metadatos de cada archivo pertenecerán al servicio de Partes. [F6]
 
-**Obligatorios en el PDF:** API Gateway, Lambda, Amplify, S3, SNS y SQS; DynamoDB cuando se elige NoSQL. Streams y CloudWatch apoyan el diseño propuesto; no son microservicios de negocio adicionales.
+**Obligatorios en el PDF:** API Gateway, Lambda, Amplify, S3, SNS y SQS; DynamoDB cuando se elige NoSQL. EventBridge y CloudWatch apoyan el diseño propuesto; no son microservicios de negocio adicionales.
 
 ### 6.3. Vista del procesamiento por eventos
 
@@ -319,25 +319,26 @@ Amplify admite React y despliegue vinculado con Git. [F5] S3 se utilizará para 
 
 ```mermaid
 flowchart TD
-    P["MS5 finaliza el parte"] --> DB[("Parte y evento pendiente en DynamoDB")]
-    DB --> ST["DynamoDB Streams"]
-    ST --> PUB["Lambda publicadora"]
+    P["MS5 finaliza el parte"] --> DB[("Parte y evento pendiente (OUTBOX) en DynamoDB, en una transacción")]
+    DB --> PUB["La misma Lambda publica en SNS y borra el pendiente"]
+    DB -. "si la publicación falló" .-> BAR["barrerOutbox: EventBridge cada 5 minutos"]
+    BAR --> SNS
     PUB --> SNS["SNS: eventos FSM"]
     SNS --> QA["SQS de Agenda"]
     SNS --> QO["SQS de Órdenes"]
-    SNS --> QN["SQS de Analítica"]
     QA --> CA["Consumidor de Agenda"]
     QO --> CO["Consumidor de Órdenes"]
-    QN --> CN["Consumidor de Analítica"]
     CA --> DA[("Visita actualizada")]
     CO --> DO[("Actividad de la orden actualizada")]
+    CA -. "VisitaCompletada, con el mismo patrón" .-> SNS
+    SNS --> QN["SQS de Analítica"]
+    QN --> CN["Consumidor de Analítica"]
     CN --> DN[("Métricas de técnico y tenant actualizadas")]
-    CA -. "VisitaCompletada vía su publicadora" .-> SNS
 ```
 
-**Qué sucede aquí:** Partes deja registrado el resultado y que debe emitir un aviso. La publicadora envía el evento a SNS. Agenda, Órdenes y Analítica reciben una copia mediante sus propias colas.
+**Qué sucede aquí:** Partes guarda el resultado y el evento pendiente en una misma transacción, y a continuación publica en SNS y borra el pendiente. Si esa publicación falla, el cambio ya está guardado: una Lambda programada con EventBridge reenvía cada 5 minutos lo que siga pendiente. Agenda y Órdenes reciben una copia de `ParteFinalizado` mediante sus propias colas.
 
-Agenda confirma la terminación de la visita y posteriormente publica `VisitaCompletada`, que también reciben Órdenes y Analítica. Esta confirmación permite distinguir “se registró un informe” de “Agenda ya aplicó el cambio”. Agenda, Órdenes y Partes publican sus eventos con el mismo patrón de registro pendiente y publicadora; el diagrama muestra solo el recorrido del parte para mantenerlo legible.
+Agenda confirma la terminación de la visita y publica `VisitaCompletada`, que reciben Órdenes y Analítica. Esta confirmación permite distinguir “se registró un informe” de “Agenda ya aplicó el cambio”. Analítica solo cuenta `VisitaCompletada`, porque ya trae el resultado: contar también `ParteFinalizado` duplicaría las tasas. Agenda, Órdenes y Partes publican con el mismo patrón.
 
 La combinación SNS/SQS permite distribuir mensajes y procesarlos de forma desacoplada. [F7] La publicación recuperable y el tratamiento de duplicados se detallan en la sección 12.
 
@@ -465,7 +466,7 @@ No tiene operaciones de escritura desde el frontend. Escucha eventos ya existent
 - Consultar dashboard de métricas del tenant (para el coordinador)
 - Consultar ranking de técnicos por carga y rendimiento
 
-**Cómo se alimenta:** consume `VisitaProgramada`, `VisitaReprogramada`, `VisitaCancelada`, `VisitaCompletada`, `ParteFinalizado`, `OrdenCreada`, `OrdenCerrada` y `OrdenCancelada` desde su propia cola SQS. Cada evento actualiza los contadores del técnico, del día y del tenant correspondiente en su tabla DynamoDB.
+**Cómo se alimenta:** consume `VisitaProgramada`, `VisitaReprogramada`, `VisitaCancelada`, `VisitaCompletada`, `OrdenCreada`, `OrdenCerrada` y `OrdenCancelada` desde su propia cola SQS. Cada evento actualiza los contadores del técnico, del día y del tenant correspondiente en su tabla DynamoDB.
 
 **Integración con MS4 — enrutamiento inteligente:**
 
@@ -878,24 +879,25 @@ La ruta del archivo no concede acceso por sí misma. El backend autoriza la oper
 ```json
 {
   "PK": "TENANT#CLIMALIMA",
-  "SK": "TECNICO#TEC-001#METRICAS",
+  "SK": "METRICAS#TEC-001",
   "entity_type": "METRICAS_TECNICO",
   "tenant_id": "CLIMALIMA",
   "tecnico_id": "TEC-001",
   "visitas_completadas_total": 142,
   "revisitas_generadas": 8,
-  "tasa_resolucion_primer_intento": 0.94,
-  "tiempo_promedio_atencion_min": 52,
+  "primer_intento_total": 130,
+  "primer_intento_resueltos": 122,
+  "suma_minutos": 7384,
   "ultima_actualizacion": "2026-11-10T16:05:00Z"
 }
 ```
 
-El registro anterior acumula el historial completo. La carga del día se guarda aparte, un registro por técnico y fecha, para no reiniciar contadores:
+El registro anterior acumula el historial completo. Guarda numeradores y denominadores, que admiten incrementos atómicos; las tasas y promedios se calculan al leer. La carga del día se guarda aparte, un registro por técnico y fecha, para no reiniciar contadores:
 
 ```json
 {
   "PK": "TENANT#CLIMALIMA",
-  "SK": "TECNICO#TEC-001#DIA#2026-11-10",
+  "SK": "DIA#2026-11-10#TEC-001",
   "entity_type": "SNAPSHOT_TECNICO_DIA",
   "tenant_id": "CLIMALIMA",
   "tecnico_id": "TEC-001",
@@ -919,7 +921,7 @@ El registro anterior acumula el historial completo. La carga del día se guarda 
   "ordenes_canceladas": 6,
   "visitas_programadas": 31,
   "visitas_completadas": 201,
-  "tiempo_promedio_cierre_dias": 2.3,
+  "suma_segundos_cierre": 37152000,
   "actualizado_en": "2026-11-10T16:05:00Z"
 }
 ```
@@ -1134,7 +1136,7 @@ sequenceDiagram
     P-->>T: Evidencia visible en el parte
 ```
 
-Las URLs prefirmadas permiten cargar objetos sin entregar credenciales de AWS al navegador. [F11] En la propuesta, la autorización se comprueba antes de emitirlas y la clave es generada por el backend.
+Un formulario `POST` firmado permite cargar objetos sin entregar credenciales de AWS al navegador; a diferencia de un `PUT` prefirmado, deja que S3 aplique el límite de tamaño. [F11] La autorización se comprueba antes de emitirlo y la clave es generada por el backend. Una notificación de S3 confirma la evidencia y `POST /evidencias/{id}/confirmar` queda como respaldo.
 
 Como límite inicial del producto se propone admitir JPEG y PNG de hasta 5 MB por imagen. La validación de tamaño y tipo debe implementarse en el mecanismo de carga y comprobarse al confirmar; no se considera suficiente una comprobación visual del formulario.
 
@@ -1145,15 +1147,15 @@ Para consultar una evidencia, el backend vuelve a verificar el acceso y emite un
 **Actor:** técnico.
 
 1. Completa diagnóstico, tareas y resultado.
-2. Partes valida que las evidencias referenciadas estén confirmadas.
+2. Las evidencias sin confirmar no se muestran en el parte final.
 3. Verifica la visita y la asignación del técnico.
 4. En una transacción propia, guarda el parte final, el evento pendiente y una marca única por tenant y visita, condicionada a que no exista. Así dos solicitudes simultáneas no pueden finalizar partes distintos para la misma visita.
-5. La publicadora envía `ParteFinalizado` a SNS.
+5. La misma Lambda publica `ParteFinalizado` en SNS y borra el pendiente; si falla, lo reenvía el barrido.
 6. Agenda recibe el evento y valida que corresponda a la visita y asignación vigentes.
 7. Agenda cambia la visita a `FINALIZADA`, actualiza su control y genera `VisitaCompletada`.
 8. Órdenes registra el parte en su historial y procesa la confirmación de Agenda.
 9. Si la atención resolvió el trabajo y no hay pendientes conocidos, presenta la orden para revisión. Si requiere seguimiento, lo muestra como pendiente.
-10. Analítica procesa `ParteFinalizado` y `VisitaCompletada` desde su propia cola y actualiza las métricas del técnico, del día y del tenant. No interviene en el estado de la visita ni de la orden.
+10. Analítica procesa `VisitaCompletada` desde su propia cola y actualiza las métricas del técnico, del día y del tenant. No interviene en el estado de la visita ni de la orden.
 
 **La pantalla puede mostrar “Parte guardado; actualizando la orden”** mientras se procesan los eventos. Después vuelve a consultar el estado.
 
@@ -1235,8 +1237,7 @@ El estado general debe derivarse de las visitas y resultados vigentes. Un evento
 | VisitaProgramada | Agenda | Analítica | Sumar a la carga del día del técnico y a las visitas programadas del tenant. |
 | VisitaReprogramada | Agenda | Analítica | Mover la carga entre días o técnicos si cambia la fecha o la asignación. |
 | VisitaCancelada | Agenda | Analítica | Restar de la carga del día del técnico. |
-| VisitaCompletada | Agenda | Analítica | Actualizar contadores del técnico: visitas del día, tiempo de atención y tasa de resolución. |
-| ParteFinalizado | Partes | Analítica | Registrar resultado del parte para calcular tasa de resolución en primer intento. |
+| VisitaCompletada | Agenda | Analítica | Actualizar contadores del técnico: visitas del día, tiempo de atención y resolución en primer intento. Es el único evento que los alimenta, para no contar dos veces. |
 | OrdenCreada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes abiertas. |
 | OrdenCerrada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes cerradas y tiempo promedio de cierre. |
 | OrdenCancelada | Órdenes | Analítica | Actualizar snapshot del tenant: órdenes canceladas. |
@@ -1289,9 +1290,9 @@ Se propone un tema SNS de eventos FSM y tres colas, una por consumidor:
 |---|---|---|
 | Cola de Agenda | ParteFinalizado. | Lambda del servicio Agenda. |
 | Cola de Órdenes | Eventos de Agenda y ParteFinalizado. | Lambda del servicio Órdenes. |
-| Cola de Analítica | Eventos de visita (programada, reprogramada, cancelada, completada), ParteFinalizado y eventos de orden (creada, cerrada, cancelada). | Lambda del servicio Analítica. |
+| Cola de Analítica | Eventos de visita (programada, reprogramada, cancelada, completada) y de orden (creada, cerrada, cancelada). | Lambda del servicio Analítica. |
 
-Las suscripciones filtran por tipo de evento; para ello, cada publicadora incluye `event_type` como atributo del mensaje SNS. Cada cola tiene su propia configuración de reintentos y una cola de errores.
+Las suscripciones filtran por tipo de evento; para ello, cada productor incluye `event_type` como atributo del mensaje SNS. Cada cola tiene su propia configuración de reintentos y una cola de errores.
 
 Si dos funciones compiten por una sola cola, no se obtiene automáticamente una copia para cada área. Por eso se utilizan colas separadas para los consumidores que necesitan procesar el mismo hecho.
 
@@ -1299,19 +1300,16 @@ Analítica solo consume: sus fallos o retrasos no afectan a Agenda ni a Órdenes
 
 ### 12.4. Guardar también el aviso pendiente
 
-Guardar un parte y luego llamar a SNS son dos acciones diferentes. Para recuperar una falla entre ambas, el servicio guarda el cambio de negocio y un registro `OUTBOX` en una transacción de su propia base.
+Guardar un parte y luego llamar a SNS son dos acciones diferentes. Para recuperar una falla entre ambas, el servicio guarda el cambio de negocio y un registro `OUTBOX` en una transacción de su propia base. Lo aplican los tres servicios que producen eventos: Órdenes, Agenda y Partes.
 
-Ese registro conserva el evento pendiente. Tienen publicadora los tres servicios que producen eventos: Órdenes, Agenda y Partes. Una Lambda asociada a DynamoDB Streams publica los nuevos registros `OUTBOX` en SNS y marca su publicación. Streams permite activar funciones a partir de cambios en DynamoDB. [F12]
+**Cómo se publica, sin DynamoDB Streams:**
 
-**Controles del publicador:**
+1. Después de confirmar la transacción, la misma Lambda publica en SNS y borra el registro `OUTBOX`.
+2. Si la publicación falla, se registra el error y se responde igualmente con éxito: el cambio ya se guardó.
+3. Una Lambda `barrerOutbox`, programada con EventBridge cada 5 minutos en cada servicio productor, reenvía con el mismo `event_id` lo que siga pendiente.
+4. Si el barrido y la ruta normal coinciden, el evento se publica dos veces; los consumidores lo absorben con `INBOX` (sección 12.5).
 
-- Procesar solo los registros de evento que correspondan; no convertir cada modificación de tabla en un evento público.
-- Mantener el mismo event_id al reintentar.
-- No generar nuevos avisos por actualizar una marca de publicación.
-- Conservar los pendientes y ofrecer un procedimiento para reintentarlos.
-- Detectar publicaciones que siguen pendientes; la recuperación no debe depender indefinidamente del historial temporal del stream.
-
-Para el proyecto, un comando de recuperación que lea pendientes y los vuelva a publicar puede complementar el disparador. El procedimiento y sus permisos deben quedar documentados.
+Se descartó Streams porque añadía tres Lambdas publicadoras que se activan con cada cambio de tabla, sin aportar más garantías que el barrido.
 
 ### 12.5. Procesar sin duplicar efectos
 
@@ -1446,7 +1444,7 @@ El calendario visual puede comenzar como una lista por fecha y técnico. Lo indi
 | `backend/shared/` | Utilidades comunes de identidad, errores y contratos. |
 | `infra/` | Configuración de Serverless Framework y recursos compartidos. |
 | `scripts/seed/` | Generador Python/boto3 para ejecución directa desde MV, relaciones y conteos. |
-| `scripts/recovery/` | Recuperación controlada de eventos pendientes. |
+| `backend/*/serverless.yml` (`barrerOutbox`) | Recuperación programada de eventos pendientes. |
 | `docs/` | Arquitectura, diseños de datos, informe y evidencias. |
 
 Es una estructura sugerida para un repositorio común. Las carpetas por sí solas no crean microservicios: deben existir responsabilidades, interfaces, persistencia y permisos separados.
@@ -1454,9 +1452,9 @@ Es una estructura sugerida para un repositorio común. Las carpetas por sí sola
 ### 15.2. Recursos que deben quedar declarados
 
 - Rutas API Gateway, autorizador y funciones Lambda.
-- Tablas, claves, índices y streams que utilice cada servicio.
+- Tablas, claves e índices que utilice cada servicio.
 - Tema SNS, suscripciones, colas SQS y colas de errores.
-- Conexión de las colas y streams con sus Lambdas.
+- Conexión de las colas con sus Lambdas y programación de los barridos en EventBridge.
 - Bucket S3 privado y configuración de carga necesaria.
 - Roles y permisos de ejecución.
 - Configuración de registros y variables de entorno.

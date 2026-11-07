@@ -1,0 +1,26 @@
+{
+  "CLIENTE": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "CLIENTE#CLI-CLIMALIMA-00000",
+    "entity_type": "CLIENTE",
+    "tenant_id": "CLIMALIMA",
+    "cliente_id": "CLI-CLIMALIMA-00000",
+    "nombre": "Clínica Vargas 00000",
+    "telefono": "930869120",
+    "activo": true,
+    "creado_en": "2026-10-11T13:00:00Z",
+    "GSI1PK": "TENANT#CLIMALIMA#CLIENTE",
+    "GSI1SK": "clinica vargas 00000#CLI-CLIMALIMA-00000"
+  },
+  "UBICACION": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "UBICACION#CLI-CLIMALIMA-00000#LOC-CLIMALIMA-00000",
+    "entity_type": "UBICACION",
+    "tenant_id": "CLIMALIMA",
+    "cliente_id": "CLI-CLIMALIMA-00000",
+    "ubicacion_id": "LOC-CLIMALIMA-00000",
+    "nombre": "Local principal",
+    "direccion": "Av. Angamos 2069",
+    "distrito": "San Isidro"
+  }
+}

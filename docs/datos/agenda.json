@@ -1,0 +1,52 @@
+{
+  "VISITA": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "VISITA#VIS-CLIMALIMA-00000-1",
+    "entity_type": "VISITA",
+    "tenant_id": "CLIMALIMA",
+    "visita_id": "VIS-CLIMALIMA-00000-1",
+    "orden_id": "OT-1792936800000-CLI00000",
+    "tecnico_id": "TEC-CLIMALIMA-0003",
+    "tecnico_nombre": "Miguel Huamán",
+    "orden_descripcion": "No enfría",
+    "cliente_nombre": "Inversiones Rojas 00085",
+    "direccion": "Av. La Marina 1416",
+    "distrito": "San Isidro",
+    "tipo_servicio": "REPARACION",
+    "inicio": "2026-10-29T13:00:00Z",
+    "fin": "2026-10-29T13:30:00Z",
+    "fecha": "2026-10-29",
+    "estado": "FINALIZADA",
+    "numero_visita_orden": 1,
+    "version": 3,
+    "creada_en": "2026-10-25T14:00:00Z",
+    "GSI1PK": "TENANT#CLIMALIMA#TEC#TEC-CLIMALIMA-0003",
+    "GSI1SK": "2026-10-29T13:00:00Z#VIS-CLIMALIMA-00000-1",
+    "GSI2PK": "TENANT#CLIMALIMA#ORDEN#OT-1792936800000-CLI00000",
+    "GSI2SK": "2026-10-29T13:00:00Z#VIS-CLIMALIMA-00000-1",
+    "GSI3PK": "TENANT#CLIMALIMA#FECHA#2026-10-29",
+    "GSI3SK": "2026-10-29T13:00:00Z#VIS-CLIMALIMA-00000-1",
+    "resultado": "RESUELTO",
+    "iniciada_en": "2026-10-29T13:00:00Z",
+    "finalizada_en": "2026-10-29T13:22:00Z",
+    "duracion_min": 22
+  },
+  "CONTROL_ORDEN": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "CONTROL_ORDEN#OT-1794232800000-CLI90000",
+    "entity_type": "CONTROL_ORDEN",
+    "tenant_id": "CLIMALIMA",
+    "orden_id": "OT-1794232800000-CLI90000",
+    "acepta_programaciones": true,
+    "visitas_activas": 1,
+    "visitas_total": 1
+  },
+  "BLOQUE": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "BLOQUE#2026-11-12#TEC-CLIMALIMA-0002#2026-11-12T13:00:00Z",
+    "entity_type": "BLOQUE",
+    "tecnico_id": "TEC-CLIMALIMA-0002",
+    "visita_id": "VIS-CLIMALIMA-P00000",
+    "hora": "08:00"
+  }
+}

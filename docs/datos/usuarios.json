@@ -1,0 +1,14 @@
+{
+  "USUARIO": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "USUARIO#USR-CLIMALIMA-00000",
+    "entity_type": "USUARIO",
+    "tenant_id": "CLIMALIMA",
+    "usuario_id": "USR-CLIMALIMA-00000",
+    "email": "perfil00000@climalima.example.com",
+    "nombre": "Miguel Díaz",
+    "rol": "COORDINADOR",
+    "estado": "INACTIVO",
+    "creado_en": "2026-10-11T13:00:00Z"
+  }
+}

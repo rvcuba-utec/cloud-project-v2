@@ -1,0 +1,39 @@
+{
+  "PARTE": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "PARTE#PAR-CLIMALIMA-00000-1",
+    "entity_type": "PARTE",
+    "tenant_id": "CLIMALIMA",
+    "parte_id": "PAR-CLIMALIMA-00000-1",
+    "visita_id": "VIS-CLIMALIMA-00000-1",
+    "orden_id": "OT-1792936800000-CLI00000",
+    "tecnico_id": "TEC-CLIMALIMA-0003",
+    "tecnico_nombre": "Miguel Huamán",
+    "cliente_nombre": "Inversiones Rojas 00085",
+    "direccion": "Av. La Marina 1416",
+    "distrito": "San Isidro",
+    "fecha": "2026-10-29",
+    "numero_visita_orden": 1,
+    "estado": "FINALIZADO",
+    "diagnostico": "Falta de refrigerante",
+    "tareas": [
+      "Prueba de funcionamiento"
+    ],
+    "materiales": [
+      "Refrigerante R410A"
+    ],
+    "resultado": "RESUELTO",
+    "evidencias_solicitadas": 0,
+    "version": 3,
+    "creado_en": "2026-10-29T13:00:00Z",
+    "finalizado_en": "2026-10-29T13:22:00Z",
+    "GSI1PK": "TENANT#CLIMALIMA#ORDEN#OT-1792936800000-CLI00000",
+    "GSI1SK": "PARTE#PAR-CLIMALIMA-00000-1"
+  },
+  "MARCA_VISITA": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "MARCA_VISITA#VIS-CLIMALIMA-00000-1",
+    "entity_type": "MARCA_VISITA",
+    "parte_id": "PAR-CLIMALIMA-00000-1"
+  }
+}

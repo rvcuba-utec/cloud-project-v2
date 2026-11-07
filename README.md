@@ -24,7 +24,9 @@ SaaS multitenant de gestión de servicios en campo, en AWS: serverless y basado 
 | `./deploy.sh frontend` | Solo compila y publica la web |
 | `./deploy.sh <servicio>` | Solo un microservicio: `usuarios`, `clientes`, `tecnicos`, `analitica`, `ordenes`, `agenda`, `partes` |
 | `./deploy.sh --stage prod` | Lo mismo, en otro stage |
-| `./seed.sh --escala 0.01` | Carga una muestra de datos |
+| `./seed.sh --escala 0.01` | Carga una muestra de datos y genera el reporte de conteos |
+| `./seed.sh` | Carga completa: más de 30 000 registros por servicio, en 3 empresas. Hazla desde la MV |
+| `./seed.sh --dry-run` | Solo cuenta lo que generaría, sin escribir |
 | `./check.sh` | Comprueba el sistema sin desplegar |
 | `./warmup.sh` | Calienta las Lambdas antes de una demo |
 | `./destroy.sh` | Elimina un stage en AWS, pidiendo confirmación |
@@ -38,12 +40,24 @@ Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el com
 ```bash
 ./test.sh                  # backend y frontend, sin AWS
 scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
+scripts/pruebas_web.sh     # recorrido completo en un navegador real, instalado dentro del proyecto
 ```
 
 ## Restricción de concurrencia
 
 La carga masiva va **directa a DynamoDB con boto3, nunca por API Gateway ni Lambda**. No se hacen pruebas de carga: superar el límite de Lambdas concurrentes puede causar el bloqueo de la cuenta de Academy.
 
-## Diseño
+## Carga de datos
 
-Ver `ideas/implementation-plan-v4.md` e `ideas/implementation-plan-v3.md`.
+La carga no depende de esta laptop: se puede repetir sin duplicar y reanudar si caduca la sesión, porque los ID solo dependen de la semilla y de la fecha base (guardada en `.local-env/`). Mide primero con `--escala 0.01`.
+
+## Documentación
+
+| Tema | Dónde |
+|---|---|
+| Arquitectura | `ideas/aws-architecture.md` y `diagrams/trazora-arquitectura-tecnica.drawio` |
+| Rutas de la API | `docs/api.md` y `docs/postman/` |
+| Datos, claves y patrones de acceso | `docs/datos/` |
+| Guion de la demo | `docs/guia-demo.md` |
+| Evidencias | `docs/evidencias/` |
+| Propuesta y planes | `ideas/` |

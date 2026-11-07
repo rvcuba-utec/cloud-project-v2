@@ -1,0 +1,40 @@
+{
+  "SNAPSHOT_TECNICO_DIA": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "DIA#2026-10-29#TEC-CLIMALIMA-0003",
+    "tenant_id": "CLIMALIMA",
+    "ultima_actualizacion": "2026-11-10T13:00:00Z",
+    "entity_type": "SNAPSHOT_TECNICO_DIA",
+    "tecnico_id": "TEC-CLIMALIMA-0003",
+    "fecha": "2026-10-29",
+    "visitas_asignadas": 1,
+    "visitas_completadas": 1
+  },
+  "SNAPSHOT_TENANT": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "DASHBOARD#2026-10",
+    "tenant_id": "CLIMALIMA",
+    "ultima_actualizacion": "2026-11-10T13:00:00Z",
+    "entity_type": "SNAPSHOT_TENANT",
+    "periodo": "2026-10",
+    "visitas_programadas": 0,
+    "visitas_completadas": 84,
+    "ordenes_creadas": 100,
+    "ordenes_abiertas": 0,
+    "ordenes_cerradas": 69,
+    "suma_segundos_cierre": 28573140
+  },
+  "METRICAS_TECNICO": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "METRICAS#TEC-CLIMALIMA-0003",
+    "tenant_id": "CLIMALIMA",
+    "ultima_actualizacion": "2026-11-10T13:00:00Z",
+    "entity_type": "METRICAS_TECNICO",
+    "tecnico_id": "TEC-CLIMALIMA-0003",
+    "visitas_completadas_total": 30,
+    "suma_minutos": 1349,
+    "primer_intento_total": 29,
+    "primer_intento_resueltos": 27,
+    "revisitas_generadas": 2
+  }
+}
