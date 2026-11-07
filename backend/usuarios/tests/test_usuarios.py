@@ -271,3 +271,15 @@ def test_cambiar_nombre_actualiza_la_busqueda():
     u = crear_usuario(email="luis@ejemplo.com", nombre="Luis")
     actualizar.lambda_handler(peticion(ctx(), {"nombre": "Ludovico"}, {"usuario_id": u["usuario_id"]}), None)
     assert [x["email"] for x in listar_con(q="ludov")["items"]] == ["luis@ejemplo.com"]
+
+
+def test_filtro_encuentra_cuentas_al_final_de_muchos_perfiles(monkeypatch):
+    """Con datos de carga, los perfiles inactivos van antes que las cuentas reales en el orden de la clave."""
+    monkeypatch.setattr(listar, "LECTURA_FILTRADA", 5)
+    tabla = dynamo.tabla()
+    for i in range(40):
+        tabla.put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": f"USUARIO#USR-0{i:04d}", "entity_type": "USUARIO",
+                             "usuario_id": f"USR-0{i:04d}", "email": f"p{i}@x.com", "nombre": "Perfil", "rol": "COORDINADOR", "estado": "INACTIVO"})
+    tabla.put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": "USUARIO#USR-ADMIN", "entity_type": "USUARIO",
+                         "usuario_id": "USR-ADMIN", "email": "admin@x.com", "nombre": "Admin", "rol": "ADMIN", "estado": "ACTIVO"})
+    assert [u["usuario_id"] for u in listar_con(rol="ADMIN", estado="ACTIVO")["items"]] == ["USR-ADMIN"]

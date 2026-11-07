@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Trazora FSM",
-    "description": "Generada desde los serverless.yml. Define url_<servicio> y token como variables de entorno. Las URL las imprime ./check.sh.",
+    "description": "Generada desde los serverless.yml. Define url_<servicio> y token como variables.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -476,6 +476,21 @@
           }
         },
         {
+          "name": "GET /ordenes/mapa",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url_ordenes}}/ordenes/mapa"
+            }
+          }
+        },
+        {
           "name": "GET /ordenes/{orden_id}/historial",
           "request": {
             "method": "GET",
@@ -675,6 +690,21 @@
             ],
             "url": {
               "raw": "{{url_agenda}}/disponibilidad"
+            }
+          }
+        },
+        {
+          "name": "GET /alertas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{url_agenda}}/alertas"
             }
           }
         }

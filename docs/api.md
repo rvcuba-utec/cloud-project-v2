@@ -1,11 +1,12 @@
 # API de Trazora FSM
 
-Una API REST por microservicio. La URL de cada una la imprime `./check.sh`.
+Generado por `scripts/documentar_api.py` desde los `serverless.yml`. La URL de cada API la imprime `./check.sh`.
 
 - **Autenticación:** `Authorization: Bearer <token>`, salvo `POST /auth/login`. El tenant y el rol salen del autorizador, nunca del cuerpo ni de la URL.
 - **Errores:** `{"error": {"codigo", "mensaje", "detalle"}}`. 400 entrada inválida, 401 sin sesión, 403 sin permiso, 404 inexistente o de otra empresa, 409 conflicto de estado, versión u horario.
 - **Listas:** `limit` (de 1 a 100) y `cursor`; la respuesta trae `items` y `next_cursor`.
 - **Creaciones repetibles:** clientes, técnicos, órdenes y visitas aceptan la cabecera `Idempotency-Key`.
+- **Funciones internas sin ruta** (`lambda.invoke`): `bloquearOrden` (Agenda), `disponiblesInterno` (Técnicos) y `tecnicosInterno` (Analítica).
 - **Colección de Postman:** `docs/postman/trazora.postman_collection.json`.
 
 ## MS0 Usuarios
@@ -51,6 +52,7 @@ Una API REST por microservicio. La URL de cada una la imprime `./check.sh`.
 | GET | `/ordenes` | `listar` |
 | GET | `/ordenes/{orden_id}` | `detalle` |
 | PATCH | `/ordenes/{orden_id}` | `actualizar` |
+| GET | `/ordenes/mapa` | `mapa` |
 | GET | `/ordenes/{orden_id}/historial` | `historial` |
 | POST | `/ordenes/{orden_id}/cerrar` | `cerrar` |
 | POST | `/ordenes/{orden_id}/cancelar` | `cancelar` |
@@ -66,6 +68,7 @@ Una API REST por microservicio. La URL de cada una la imprime `./check.sh`.
 | POST | `/visitas/{visita_id}/cancelar` | `cancelar` |
 | POST | `/visitas/{visita_id}/iniciar` | `iniciar` |
 | GET | `/disponibilidad` | `disponibilidad` |
+| GET | `/alertas` | `alertas` |
 
 ## MS5 Partes
 

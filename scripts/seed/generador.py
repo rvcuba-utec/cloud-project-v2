@@ -35,7 +35,7 @@ ANALITICA = _dominio("analitica", "analitica")
 
 TENANTS = ("CLIMALIMA", "FRIOSUR", "TECNINORTE")
 SERVICIOS = ("usuarios", "clientes", "tecnicos", "ordenes", "agenda", "partes", "analitica")
-BASE_POR_TENANT = {"usuarios": 10000, "clientes": 10000, "tecnicos": 50, "ordenes": 10000, "programadas": 20}
+BASE_POR_TENANT = {"usuarios": 10000, "clientes": 10000, "tecnicos": 50, "ordenes": 10000, "programadas": 20, "abiertas": 15}
 DIAS_BASE = 200
 PROPORCION_REVISITA = 0.06
 INTERVALOS = [{"inicio": "08:00", "fin": "12:00"}, {"inicio": "13:00", "fin": "17:00"}]
@@ -81,6 +81,7 @@ class _Empresa:
         self.tenant, self.base = tenant, base
         self.azar = random.Random(f"{semilla}-{tenant}")
         self.azar_mapa = random.Random(f"{semilla}-{tenant}-mapa")
+        self.azar_abiertas = random.Random(f"{semilla}-{tenant}-abiertas")
         self.escala = escala
         self.n_tecnicos = max(5, cantidad("tecnicos", escala))
         self.dias = max(40, round(DIAS_BASE * escala))
@@ -101,6 +102,9 @@ class _Empresa:
             self._orden_cerrada(i)
         for i in range(max(5, cantidad("programadas", self.escala))):
             self._orden_programada(i)
+        # Al final y con su propio sorteador: no cambian los datos ya cargados.
+        for i in range(max(3, cantidad("abiertas", self.escala))):
+            self._orden_abierta(i)
         self._analitica()
         return self.salida
 
@@ -325,6 +329,19 @@ class _Empresa:
             })
         self.eventos_analitica.append(("OrdenCreada", {"creada_en": orden["creada_en"]}))
         self.eventos_analitica.append(("VisitaProgramada", {"tecnico_id": tecnico["tecnico_id"], "fecha": fecha.isoformat()}))
+
+    def _orden_abierta(self, i):
+        """Recién registradas y aún sin visita: los puntos rojos del mapa, por atender."""
+        azar = self.azar_abiertas
+        cliente = azar.choice(self.clientes)
+        creada = self._instante(self.base - datetime.timedelta(days=azar.randint(0, 3)), azar.choice(("08:00", "11:00", "15:00")))
+        orden_id = self._id_orden(creada, 80000 + i)
+        guardado, self.azar = self.azar, azar  # _orden_base sortea la descripción y la prioridad.
+        orden = self._orden_base(orden_id, cliente, azar.choice(TIPOS), "ABIERTA", creada, 1)
+        self.azar = guardado
+        orden["resumen_visitas"] = {}
+        self.salida["ordenes"] += [orden, self._historial(orden_id, creada, "ORDEN_CREADA", "Orden registrada", "a")]
+        self.eventos_analitica.append(("OrdenCreada", {"creada_en": orden["creada_en"]}))
 
     # ---- Analítica
     def _analitica(self):

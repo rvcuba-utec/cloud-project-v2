@@ -72,6 +72,18 @@ La paginación con `cursor` devuelve la página siguiente sin repetir registros.
 
 Muestra del 1 %: 4 089 ítems en 28 s. `dev` conserva esa muestra y los datos de las pruebas; los conteos válidos son los de `prod`.
 
+## Automatizaciones (contra AWS real, `tests/integracion/test_automatizacion_aws.py`)
+
+- **Reasignación por ausencia:** se registra la ausencia del técnico de demo y, por el evento `TecnicoAusente`, Agenda pasa su visita a otro técnico libre según Analítica (o deja una alerta si nadie puede); Órdenes anota en el historial que fue automática. Registrar la misma ausencia otra vez no vuelve a reasignar.
+- **Cancelación en cascada:** cancelar una orden con 2 visitas programadas las cancela a las dos.
+- **Mapa, alertas y filtros de usuarios** responden con permisos por rol.
+
+Encontrado y corregido al probar en AWS: el cierre de una orden fallaba si los eventos de sus visitas llegaban a Órdenes durante el cierre; ahora relee la orden antes del paso final. También que AWS Academy deshabilita los disparadores SQS al apagar el laboratorio: `./warmup.sh` los reactiva y `./check.sh` avisa.
+
+## Portada y revisor de la skill de diseño
+
+`/presentacion/` sigue el recorrido completo de la skill `design-taste-frontend` (tipo software). Su revisor terminó en **GATE: OPEN 4** tras sus 3 rondas, con estos fallos abiertos: contraste del subtítulo del encabezado (5,6:1; el kit pide 7:1, AA exige 4,5:1), hueco entre las secciones de reasignación y preguntas, la sección de funciones mide 2,1 pantallas a 390 px, y el chequeo de títulos, que no reconoce sustantivos en español. Excepciones registradas con su motivo: largo del h1 medido con relleno, botones del tablero de muestra y la sección de preguntas sin imagen.
+
 ## Pendiente de comprobar
 
 - Ensayo de la demo partiendo de un laboratorio recién iniciado.

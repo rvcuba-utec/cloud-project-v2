@@ -6,7 +6,10 @@ from trazora_common.http import api_handler, entrada_invalida, parametro_query, 
 
 from dominio.usuarios import ESTADOS, ROLES, texto_busqueda, vista_publica
 
-PAGINAS_MAXIMAS = 8  # Con filtros, se leen varias páginas para llenar una; nunca toda la partición de una vez.
+# Con filtros se leen varias páginas de DynamoDB para llenar una de la API: 30 de 1 000 cubren los
+# 10 000 perfiles de una empresa en una petición, sin dejar al administrador ante una página vacía.
+PAGINAS_MAXIMAS = 30
+LECTURA_FILTRADA = 1000
 
 
 @api_handler
@@ -38,7 +41,7 @@ def lambda_handler(event, context):
     for _ in range(PAGINAS_MAXIMAS):
         parametros = {
             "KeyConditionExpression": Key("PK").eq(contexto.pk) & Key("SK").begins_with("USUARIO#"),
-            "Limit": limite if filtro is None else 500,
+            "Limit": limite if filtro is None else LECTURA_FILTRADA,
         }
         if filtro is not None:
             parametros["FilterExpression"] = filtro

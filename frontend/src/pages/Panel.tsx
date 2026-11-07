@@ -89,7 +89,11 @@ export default function Panel() {
   const mes = useQuery({ queryKey: ['dashboard', periodo], queryFn: () => analitica.dashboard(periodo), placeholderData: keepPreviousData, enabled: /^\d{4}-\d{2}$/.test(periodo) });
   const rendimiento = useQuery({ queryKey: ['rendimiento', hoy], queryFn: () => analitica.tecnicos(hoy) });
   const perfiles = useQuery({ queryKey: ['tecnicos-nombres'], queryFn: () => tecnicos.listar({ limit: 100 }) });
-  const visitasHoy = useQuery({ queryKey: ['visitas-dia', hoy], queryFn: () => agenda.listar({ fecha: hoy, limit: 50 }), refetchInterval: 30_000 });
+  const visitasHoy = useQuery({
+    queryKey: ['visitas-dia', hoy, 'panel'],
+    queryFn: async () => { const p = await agenda.listar({ fecha: hoy, limit: 50 }); return { ...p, items: p.items.filter((v) => v.estado !== 'CANCELADA') }; },
+    refetchInterval: 30_000,
+  });
 
   const nombres = useMemo(() => new Map(perfiles.data?.items.map((t) => [t.tecnico_id, t.nombre])), [perfiles.data]);
   const filas = useMemo(() => [...(rendimiento.data?.items ?? [])]

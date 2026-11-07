@@ -28,7 +28,7 @@ SaaS multitenant de gestión de servicios en campo, en AWS: serverless y basado 
 | `./seed.sh` | Carga completa: más de 30 000 registros por servicio, en 3 empresas. Hazla desde la MV |
 | `./seed.sh --dry-run` | Solo cuenta lo que generaría, sin escribir |
 | `./check.sh` | Comprueba el sistema sin desplegar |
-| `./warmup.sh` | Calienta las Lambdas antes de una demo |
+| `./warmup.sh` | Reactiva los disparadores SQS (Academy los apaga al cerrar el laboratorio) y calienta las Lambdas. Úsalo siempre tras reiniciar el laboratorio |
 | `./destroy.sh` | Elimina un stage en AWS, pidiendo confirmación |
 | `./clean.sh` | Borra las herramientas y credenciales locales; no toca AWS |
 | `scripts/verificar_cuenta.sh` | Comprueba que la cuenta admite el diseño, con recursos temporales |
@@ -39,7 +39,7 @@ Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el com
 
 | Stage | Para qué | Web |
 |---|---|---|
-| `prod` | Demo y entrega, con la carga completa | https://main.d35ompbd427o7g.amplifyapp.com |
+| `prod` | Demo y entrega, con la carga completa | https://main.d35ompbd427o7g.amplifyapp.com (portada en `/presentacion/`) |
 | `dev` | Desarrollo y pruebas que crean datos | https://main.d2g24nm1pe171b.amplifyapp.com |
 
 Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --stage prod`.
