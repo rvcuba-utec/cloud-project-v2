@@ -43,11 +43,17 @@ def nueva_orden(apis, token_de):
     return crear
 
 
-def horario_libre(apis, token, fecha, duracion=60):
-    estado, _, datos = http(f"{apis['agenda']}/disponibilidad?fecha={fecha}&especialidad=REPARACION&duracion_min={duracion}", token=token)
-    assert estado == 200, datos
-    opcion = next(o for o in datos["items"] if o["tecnico_id"] == TECNICO)
-    return opcion["horarios"][-1]
+def dia_y_hora(apis, token, desde_dias, duracion=60):
+    """El primer día desde `desde_dias` en que el técnico de demo tiene una hora libre: las pruebas
+    repetidas van llenando su agenda."""
+    for dias in range(desde_dias, 29):
+        fecha = manana_mas(dias)
+        estado, _, datos = http(f"{apis['agenda']}/disponibilidad?fecha={fecha}&especialidad=REPARACION&duracion_min={duracion}", token=token)
+        assert estado == 200, datos
+        opcion = next((o for o in datos["items"] if o["tecnico_id"] == TECNICO), None)
+        if opcion and opcion["horarios"]:
+            return fecha, opcion["horarios"][-1]
+    pytest.skip("El técnico de demo no tiene horas libres en sus próximas jornadas")
 
 
 def programar(apis, token, orden, fecha, hora, fin_hora):
@@ -64,8 +70,7 @@ def fin_de(hora):
 @pytest.mark.muta
 def test_reserva_concurrente_confirma_exactamente_una(apis, token_de, nueva_orden):
     token = token_de("CLIMALIMA")
-    fecha = manana_mas(20)
-    hora = horario_libre(apis, token, fecha)
+    fecha, hora = dia_y_hora(apis, token, 20)
     ordenes = [nueva_orden() for _ in range(HILOS)]  # Órdenes distintas: compiten solo por el bloque.
 
     with ThreadPoolExecutor(max_workers=HILOS) as hilos:
@@ -83,9 +88,8 @@ def test_recorrido_de_visita_y_aislamiento(apis, token_de, nueva_orden):
     token = token_de("CLIMALIMA")
     tecnico = token_de("CLIMALIMA", "TECNICO")
     ajeno = token_de("FRIOSUR")
-    fecha = manana_mas(21)
     orden = nueva_orden()
-    hora = horario_libre(apis, token, fecha)
+    fecha, hora = dia_y_hora(apis, token, 21)
 
     estado, _, visita = programar(apis, token, orden, fecha, hora, fin_de(hora))
     assert estado == 201, visita
@@ -125,9 +129,8 @@ def test_recorrido_de_visita_y_aislamiento(apis, token_de, nueva_orden):
 @pytest.mark.muta
 def test_cancelar_visita_libera_el_horario_y_permite_cancelar_la_orden(apis, token_de, nueva_orden):
     token = token_de("CLIMALIMA")
-    fecha = manana_mas(22)
     orden = nueva_orden()
-    hora = horario_libre(apis, token, fecha)
+    fecha, hora = dia_y_hora(apis, token, 22)
     estado, _, visita = programar(apis, token, orden, fecha, hora, fin_de(hora))
     assert estado == 201, visita
 
@@ -146,9 +149,8 @@ def test_cancelar_visita_libera_el_horario_y_permite_cancelar_la_orden(apis, tok
 @pytest.mark.muta
 def test_cierre_concurrente_con_reserva_nunca_ambos(apis, token_de, nueva_orden):
     token = token_de("CLIMALIMA")
-    fecha = manana_mas(23)
     orden = nueva_orden()
-    hora = horario_libre(apis, token, fecha)
+    fecha, hora = dia_y_hora(apis, token, 23)
 
     with ThreadPoolExecutor(max_workers=2) as hilos:
         cancelacion = hilos.submit(http, f"{apis['ordenes']}/ordenes/{orden}/cancelar", "POST", token)

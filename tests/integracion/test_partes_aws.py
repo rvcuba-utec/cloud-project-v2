@@ -61,10 +61,16 @@ def nueva_visita(apis, token_de):
             "tipo_servicio": "REPARACION", "descripcion": "Prueba", "prioridad": "MEDIA",
         })
         lima = datetime.timezone(datetime.timedelta(hours=-5))
-        fecha = (datetime.datetime.now(lima).date() + datetime.timedelta(days=dias)).isoformat()
-        estado, _, opciones = http(f"{apis['agenda']}/disponibilidad?fecha={fecha}&especialidad=REPARACION&duracion_min=30", token=admin)
-        assert estado == 200, opciones
-        hora = next(o for o in opciones["items"] if o["tecnico_id"] == TECNICO)["horarios"][0]
+        for extra in range(dias, 29):  # Las pruebas repetidas van llenando la agenda del técnico de demo.
+            fecha = (datetime.datetime.now(lima).date() + datetime.timedelta(days=extra)).isoformat()
+            estado, _, opciones = http(f"{apis['agenda']}/disponibilidad?fecha={fecha}&especialidad=REPARACION&duracion_min=30", token=admin)
+            assert estado == 200, opciones
+            opcion = next((o for o in opciones["items"] if o["tecnico_id"] == TECNICO), None)
+            if opcion and opcion["horarios"]:
+                hora = opcion["horarios"][0]
+                break
+        else:
+            pytest.skip("El técnico de demo no tiene horas libres en sus próximas jornadas")
         fin = (datetime.datetime.fromisoformat(f"{fecha}T{hora}:00") + datetime.timedelta(minutes=30)).strftime("%H:%M")
         estado, _, visita = http(f"{apis['agenda']}/visitas", "POST", admin, {
             "orden_id": orden["orden_id"], "tecnico_id": TECNICO, "inicio": utc(fecha, hora), "fin": utc(fecha, fin),
