@@ -1,5 +1,6 @@
 # Publicación del frontend en Amplify Hosting, sin conexión a Git.
-REGLA_SPA='[{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
+# La portada estática va antes que la regla de la SPA: si no, Amplify la reescribiría a index.html.
+REGLA_SPA='[{"source":"/presentacion","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/index.html","target":"/presentacion/index.html","status":"200"},{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
 RAMA=main
 
 preparar_amplify() {
@@ -11,6 +12,7 @@ preparar_amplify() {
     aws amplify create-branch --app-id "$APP_ID" --branch-name "$RAMA" >/dev/null
   fi
   ORIGEN_FRONTEND="$(url_web "$APP_ID")"
+  aws amplify update-app --app-id "$APP_ID" --custom-rules "$REGLA_SPA" >/dev/null   # Reglas al día en cada despliegue.
 }
 
 escribir_env_frontend() {

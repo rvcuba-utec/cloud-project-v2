@@ -72,7 +72,11 @@ export default function Plantilla() {
   });
 
   if (cargando) return <div className="p-6"><Cargando /></div>;
-  if (!usuario) return <Navigate to="/login" replace />;
+  if (!usuario) {
+    // Sin sesión, la raíz muestra la portada pública (estática, fuera de la SPA).
+    if (window.location.pathname === '/') { window.location.replace('/presentacion/'); return null; }
+    return <Navigate to="/login" replace />;
+  }
   const pendientes = avisos.data?.pendientes.length ?? 0;
   const enlaces = ENLACES.filter((e) => e.roles.includes(usuario.rol));
 
