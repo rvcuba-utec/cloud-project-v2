@@ -132,3 +132,18 @@ def test_volumen_completo_supera_el_minimo_sin_generar():
     assert generador.cantidad("clientes", 1) == 10000
     assert generador.cantidad("ordenes", 1) == 10000
     assert generador.cantidad("tecnicos", 1) * generador.DIAS_BASE == 10000
+
+
+def test_ningun_tecnico_generado_se_llama_como_el_de_demo():
+    """Con dos técnicos homónimos, la demo podría asignar la visita al equivocado."""
+    import bootstrap_admins
+    for tenant, demo in bootstrap_admins.TECNICOS_DEMO.items():
+        nombres = {t["nombre"] for t in tipo(generador.generar_tenant(tenant, 2032, 1.0, BASE), "tecnicos", "TECNICO")}
+        assert demo not in nombres
+        assert demo.split()[1] not in generador.APELLIDOS
+
+
+def test_nombres_de_tecnicos_unicos_por_empresa():
+    for tenant in generador.TENANTS:
+        nombres = [t["nombre"] for t in tipo(generador.generar_tenant(tenant, 2032, 1.0, BASE), "tecnicos", "TECNICO")]
+        assert len(nombres) == len(set(nombres))

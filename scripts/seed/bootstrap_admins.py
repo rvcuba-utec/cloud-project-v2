@@ -22,7 +22,8 @@ CUENTAS = [
     ("coordinador", "COORDINADOR", "Coordinación"),
     ("tecnico", "TECNICO", "Técnico de demo"),
 ]
-TECNICOS_DEMO = {"CLIMALIMA": "Carlos Quispe", "FRIOSUR": "Rosa Flores", "TECNINORTE": "Luis Paredes"}
+# Apellidos que el generador nunca usa: en la demo no puede haber dos técnicos con el mismo nombre.
+TECNICOS_DEMO = {"CLIMALIMA": "Carlos Villanueva", "FRIOSUR": "Rosa Cárdenas", "TECNINORTE": "Luis Ortega"}
 ESPECIALIDADES = ["INSTALACION", "MANTENIMIENTO", "REPARACION"]
 DIAS_JORNADA = 30
 ARCHIVO = RAIZ / ".demo-credentials"

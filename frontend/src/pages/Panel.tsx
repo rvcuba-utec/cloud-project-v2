@@ -55,6 +55,7 @@ export default function Panel() {
 
       <h2 className="mb-2 font-semibold text-slate-900">Rendimiento de técnicos</h2>
       <MensajeError error={rendimiento.error} />
+      {rendimiento.isLoading ? <p className="text-slate-600">Cargando…</p> : (
       <Tabla columnas={['Técnico', 'Visitas hoy', 'Completadas', 'Resolución sin revisita', 'Tiempo promedio', 'Revisitas']} vacio={filas.length === 0}>
         {filas.map((m) => (
           <tr key={m.tecnico_id} className="border-b border-slate-100 last:border-0">
@@ -67,9 +68,11 @@ export default function Panel() {
           </tr>
         ))}
       </Tabla>
+      )}
 
       <h2 className="mb-2 mt-6 font-semibold text-slate-900">Visitas de hoy</h2>
       <MensajeError error={visitasHoy.error} />
+      {visitasHoy.isLoading && <p className="text-slate-600">Cargando…</p>}
       <ul className="space-y-2">
         {visitasHoy.data?.items.map((v) => (
           <li key={v.visita_id} className="rounded-md border border-slate-200 bg-white p-3 text-sm">

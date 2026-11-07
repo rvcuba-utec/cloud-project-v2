@@ -35,6 +35,15 @@ SaaS multitenant de gestión de servicios en campo, en AWS: serverless y basado 
 
 Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el comando.
 
+## Stages desplegados
+
+| Stage | Para qué | Web |
+|---|---|---|
+| `prod` | Demo y entrega, con la carga completa | https://main.d35ompbd427o7g.amplifyapp.com |
+| `dev` | Desarrollo y pruebas que crean datos | https://main.d2g24nm1pe171b.amplifyapp.com |
+
+Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --stage prod`.
+
 ## Pruebas
 
 ```bash

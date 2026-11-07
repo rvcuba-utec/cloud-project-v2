@@ -48,6 +48,7 @@ try {
   await coord.waitForURL('**/panel');
   await coord.getByRole('heading', { name: 'Rendimiento de técnicos' }).waitFor();
   await coord.getByText('Órdenes abiertas').waitFor();
+  await coord.locator('tbody tr').first().waitFor({ timeout: 30000 });
   await foto(coord, '1-panel');
   paso('Coordinador entra y ve el panel');
 
@@ -69,7 +70,7 @@ try {
   await coord.getByRole('button', { name: 'Programar visita' }).click();
   const fecha = new Date(Date.now() + 26 * 86400000 - 5 * 3600000).toISOString().slice(0, 10);
   await coord.getByLabel('Fecha').fill(fecha);
-  const fila = coord.locator('li', { hasText: 'Carlos Quispe' }).first();
+  const fila = coord.locator('li', { hasText: 'Carlos Villanueva' }).first();
   await fila.waitFor({ timeout: 30000 });
   await fila.locator('button').last().click();
   await coord.getByText(/Visita 1/).first().waitFor({ timeout: 30000 });

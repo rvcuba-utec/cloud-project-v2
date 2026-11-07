@@ -98,10 +98,16 @@ class _Empresa:
     def _tecnicos(self):
         pk = _pk(self.tenant)
         desde = self.base - datetime.timedelta(days=self.dias_pasados)
+        usados = set()
         for i in range(self.n_tecnicos):
+            nombre = self._nombre_persona()
+            if nombre in usados:
+                # Sin volver a sortear: así el resto de los datos no cambia. Un coordinador no debe ver dos técnicos iguales.
+                nombre = next(f"{nombre} {a}" for a in APELLIDOS[i % len(APELLIDOS):] + APELLIDOS if f"{nombre} {a}" not in usados)
+            usados.add(nombre)
             tecnico = {
                 "PK": pk, "SK": TECNICOS.sk_tecnico(f"TEC-{self.tenant}-{i:04d}"), "entity_type": "TECNICO",
-                "tenant_id": self.tenant, "tecnico_id": f"TEC-{self.tenant}-{i:04d}", "nombre": self._nombre_persona(),
+                "tenant_id": self.tenant, "tecnico_id": f"TEC-{self.tenant}-{i:04d}", "nombre": nombre,
                 "especialidades": COMBINACIONES[i % len(COMBINACIONES)], "activo": True, "creado_en": _iso(self._instante(desde, "08:00")),
             }
             self.tecnicos.append(tecnico)

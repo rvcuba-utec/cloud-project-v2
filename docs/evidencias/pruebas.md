@@ -45,12 +45,34 @@ Chromium sin interfaz contra la URL de Amplify, sin errores de consola ni desbor
 
 Tras las pruebas, las tres DLQ quedaron vacías.
 
-## Carga de datos
+## Stage `prod`: despliegue limpio y carga completa
 
-Muestra del 1 %: 4 089 ítems en 28 s desde una laptop, directo a DynamoDB y sin invocar Lambda. Los datos se leyeron por las APIs y son coherentes entre servicios. **La carga completa aún no se ha ejecutado:** los conteos de `conteos.md` son de la muestra, junto con los datos de prueba.
+- **Despliegue desde cero:** `./deploy.sh --stage prod` creó los 8 stacks, las cuentas de demo y la web de Amplify a la primera, en 666 s. Las 16 pruebas de solo lectura pasaron.
+- **Carga completa:** 336 156 ítems en 1 622 s (27 min), desde la laptop, directo a DynamoDB con `batch_writer` en un solo proceso y sin invocar Lambda. Los 7 servicios superan los 30 000 registros de negocio: ver `conteos.md`.
+- **Recorrido en navegador** sobre `prod`, con los datos cargados: correcto.
+
+Tiempos con 30 000 registros por servicio, mejor de 3 intentos, desde la laptop (incluyen la red):
+
+| Petición | Tiempo |
+|---|---:|
+| `GET /clientes?limit=25` | 251 ms |
+| `GET /clientes?q=hotel` | 185 ms |
+| `GET /ordenes?limit=25` | 387 ms |
+| `GET /ordenes?estado=CERRADA` | 410 ms |
+| `GET /visitas?fecha=…` | 614 ms |
+| `GET /disponibilidad` con sugerencia | 1 536 ms |
+| `GET /analitica/dashboard` | 307 ms |
+| `GET /analitica/tecnicos` (50 técnicos) | 218 ms |
+
+La paginación con `cursor` devuelve la página siguiente sin repetir registros.
+
+**Corregido durante la carga:** un técnico generado se llamaba igual que el técnico de demo, y el recorrido le asignó la visita a él. Ahora los técnicos de demo usan apellidos que el generador no usa, ningún técnico se repite dentro de una empresa y hay pruebas que lo comprueban. También se corrigió que el panel mostraba "No hay registros" mientras cargaba.
+
+## Muestra en `dev`
+
+Muestra del 1 %: 4 089 ítems en 28 s. `dev` conserva esa muestra y los datos de las pruebas; los conteos válidos son los de `prod`.
 
 ## Pendiente de comprobar
 
-- Carga completa y tiempos de las listas con 30 000 registros.
-- Despliegue limpio en un stage nuevo.
 - Ensayo de la demo partiendo de un laboratorio recién iniciado.
+- Navegación en un teléfono físico.
