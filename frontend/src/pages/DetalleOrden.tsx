@@ -1,24 +1,38 @@
 import { Link, useParams } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
-import { agenda, ordenes, type Prioridad } from '../api/recursos';
-import { ESPECIALIDADES, ESTADOS_ORDEN, ESTADOS_VISITA, PRIORIDADES, fechaHora, horaLima } from '../components/formato';
+import { agenda, ordenes, partes, type Prioridad } from '../api/recursos';
+import { ESPECIALIDADES, ESTADOS_ORDEN, ESTADOS_VISITA, PRIORIDADES, RESULTADOS, fechaHora, horaLima } from '../components/formato';
 import ProgramarVisita from '../components/ProgramarVisita';
 import { Boton, CAMPO, Campo, Encabezado, MensajeError, Tarjeta } from '../components/ui';
 
 export default function DetalleOrden() {
   const { id = '' } = useParams();
   const consultas = useQueryClient();
-  const orden = useQuery({ queryKey: ['orden', id], queryFn: () => ordenes.detalle(id) });
+  const orden = useQuery({
+    queryKey: ['orden', id],
+    queryFn: () => ordenes.detalle(id),
+    // Las visitas cambian la orden por eventos, unos segundos después.
+    refetchInterval: (q) => (['CERRADA', 'CANCELADA'].includes(q.state.data?.estado ?? '') ? false : 10_000),
+  });
   const historial = useQuery({ queryKey: ['historial', id], queryFn: () => ordenes.historial(id) });
   const visitas = useQuery({ queryKey: ['visitas-orden', id], queryFn: () => agenda.listar({ orden_id: id, limit: 50 }) });
+  const partesOrden = useQuery({ queryKey: ['partes-orden', id], queryFn: () => partes.deOrden(id) });
   const [programando, setProgramando] = useState(false);
   const refrescar = () => {
     consultas.invalidateQueries({ queryKey: ['orden', id] });
     consultas.invalidateQueries({ queryKey: ['historial', id] });
     consultas.invalidateQueries({ queryKey: ['visitas-orden', id] });
+    consultas.invalidateQueries({ queryKey: ['partes-orden', id] });
   };
+  const versionOrden = orden.data?.version;
+  useEffect(() => {
+    if (versionOrden === undefined) return;
+    consultas.invalidateQueries({ queryKey: ['historial', id] });
+    consultas.invalidateQueries({ queryKey: ['visitas-orden', id] });
+    consultas.invalidateQueries({ queryKey: ['partes-orden', id] });
+  }, [versionOrden, consultas, id]);
   const cerrar = useMutation({ mutationFn: () => ordenes.cerrar(id), onSettled: refrescar });
   const cancelar = useMutation({ mutationFn: () => ordenes.cancelar(id), onSettled: refrescar });
   const prioridad = useMutation({
@@ -95,6 +109,18 @@ export default function DetalleOrden() {
           </li>
         ))}
         {visitas.data?.items.length === 0 && <li className="text-sm text-slate-500">Aún no hay visitas.</li>}
+      </ul>
+
+      <h2 className="mb-2 mt-6 font-semibold text-slate-900">Partes de trabajo</h2>
+      <MensajeError error={partesOrden.error} />
+      <ul className="space-y-2">
+        {partesOrden.data?.items.map((p) => (
+          <li key={p.parte_id} className="rounded-md border border-slate-200 bg-white p-3 text-sm">
+            <Link className="font-medium text-sky-800 underline" to={`/partes/${p.parte_id}`}>Visita {p.numero_visita_orden}</Link>
+            {' · '}{p.tecnico_nombre} · {p.estado === 'FINALIZADO' && p.resultado ? RESULTADOS[p.resultado] : 'En borrador'}
+          </li>
+        ))}
+        {partesOrden.data?.items.length === 0 && <li className="text-sm text-slate-500">Aún no hay partes.</li>}
       </ul>
     </>
   );

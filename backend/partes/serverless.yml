@@ -1,0 +1,111 @@
+org: ${env:SLS_ORG}
+service: api-partes
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_partes
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+    AGENDA_URL: ${cf:api-agenda-${sls:stage}.ServiceEndpoint}
+    BUCKET: trazora-evidencias-${sls:stage}-${aws:accountId}
+  s3:
+    evidencias:   # Aquí y no en resources: el evento s3 de abajo lo referencia (H20).
+      name: ${self:provider.environment.BUCKET}
+      publicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      corsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST, GET]   # POST: la subida usa un formulario firmado (H19).
+            AllowedOrigins:
+              - ${param:origenFrontend}
+              - http://localhost:5173
+            AllowedHeaders: ['*']
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/partes.crear
+    events:
+      - http: { path: 'visitas/{visita_id}/partes', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  deVisita:
+    handler: handlers/partes.de_visita
+    events:
+      - http: { path: 'visitas/{visita_id}/parte', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/partes.listar
+    events:
+      - http: { path: partes, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/partes.detalle
+    events:
+      - http: { path: 'partes/{parte_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  editar:
+    handler: handlers/partes.editar
+    events:
+      - http: { path: 'partes/{parte_id}', method: put, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  finalizar:
+    handler: handlers/partes.finalizar
+    events:
+      - http: { path: 'partes/{parte_id}/finalizar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  solicitarEvidencia:
+    handler: handlers/evidencias.solicitar
+    events:
+      - http: { path: 'partes/{parte_id}/evidencias', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  confirmarEvidencia:
+    handler: handlers/evidencias.confirmar
+    events:
+      - http: { path: 'evidencias/{evidencia_id}/confirmar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  onEvidenciaSubida:
+    handler: handlers/on_evidencia.lambda_handler
+    events:
+      - s3:
+          bucket: evidencias
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: tenants/
+  barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
+    handler: trazora_common.eventos.manejador_barrido
+    timeout: 60
+    environment:
+      TENANTS: ${file(../serverless.common.yml):tenants}
+    events:
+      - schedule: rate(5 minutes)
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaPartes:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Partes de una orden y evidencias de un parte
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }

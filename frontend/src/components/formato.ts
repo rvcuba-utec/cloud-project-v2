@@ -1,4 +1,4 @@
-import type { EstadoOrden, EstadoVisita, Prioridad, Especialidad } from '../api/recursos';
+import type { EstadoOrden, EstadoVisita, Prioridad, Especialidad, ResultadoParte } from '../api/recursos';
 
 export const ZONA = 'America/Lima';
 
@@ -40,6 +40,12 @@ export const ESTADOS_VISITA: Record<EstadoVisita, string> = {
   EN_ATENCION: 'En atención',
   FINALIZADA: 'Finalizada',
   CANCELADA: 'Cancelada',
+};
+
+export const RESULTADOS: Record<ResultadoParte, string> = {
+  RESUELTO: 'Resuelto',
+  REQUIERE_REVISITA: 'Requiere otra visita',
+  NO_ATENDIDO: 'No atendido',
 };
 
 /** De fecha y hora de Lima al instante UTC que espera la API. */

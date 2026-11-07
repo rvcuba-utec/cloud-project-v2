@@ -53,10 +53,60 @@ functions:
     handler: handlers/ordenes.cancelar
     events:
       - http: { path: 'ordenes/{orden_id}/cancelar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
+    handler: trazora_common.eventos.manejador_barrido
+    timeout: 60
+    environment:
+      TENANTS: ${file(../serverless.common.yml):tenants}
+    events:
+      - schedule: rate(5 minutes)
+  consumidor:
+    handler: handlers/consumidor.lambda_handler
+    timeout: 20
+    events:
+      - sqs:
+          arn: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+          batchSize: 1
+          maximumConcurrency: 2
 
 resources:
   - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
+      ColaFallidosOrdenes:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-ordenes-dlq
+          MessageRetentionPeriod: 1209600
+      ColaOrdenes:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-ordenes
+          VisibilityTimeout: 120   # 6 veces el timeout del consumidor (H22).
+          RedrivePolicy:
+            deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidosOrdenes, Arn] }
+            maxReceiveCount: 5
+      PoliticaColaOrdenes:
+        Type: AWS::SQS::QueuePolicy
+        Properties:
+          Queues: [{ Ref: ColaOrdenes }]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Principal: { Service: sns.amazonaws.com }
+                Action: sqs:SendMessage
+                Resource: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: ${self:provider.environment.TOPIC_ARN}
+      SuscripcionOrdenes:
+        Type: AWS::SNS::Subscription
+        Properties:
+          TopicArn: ${self:provider.environment.TOPIC_ARN}
+          Protocol: sqs
+          Endpoint: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+          FilterPolicy:
+            event_type: [VisitaProgramada, VisitaReprogramada, VisitaIniciada, VisitaCancelada, VisitaCompletada, ParteFinalizado]
       TablaOrdenes:
         Type: AWS::DynamoDB::Table
         Properties:

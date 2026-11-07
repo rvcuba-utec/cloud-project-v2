@@ -1,13 +1,15 @@
+import json
 from unittest import mock
 
 import pytest
 from moto import mock_aws
 
 from apoyo_pruebas import crear_tabla, ctx, cuerpo, entorno_aws, peticion
-from trazora_common import dynamo, interno
+from trazora_common import dynamo, eventos, interno
 from trazora_common.http import ApiError
 
-from handlers import ordenes
+from dominio import ordenes as dom
+from handlers import consumidor, ordenes
 
 UBICACION = {"cliente_nombre": "Comercial López", "cliente_activo": True, "direccion": "Av. 1", "distrito": "Miraflores"}
 DATOS = {"cliente_id": "CLI-1", "ubicacion_id": "LOC-1", "tipo_servicio": "REPARACION", "descripcion": "No enfría", "prioridad": "ALTA"}
@@ -237,3 +239,137 @@ def test_outbox_pendiente_si_no_se_puede_publicar():
     o = nueva()  # Sin TOPIC_ARN en este entorno: la orden se guarda y el evento queda pendiente.
     pendientes = dynamo.consultar_todo(dynamo.tabla(), "TENANT#CLIMALIMA", "OUTBOX#")
     assert [p["evento"]["aggregate_id"] for p in pendientes] == [o["orden_id"]]
+
+
+# ---- Estado derivado
+def _v(estado, numero=1, resultado=None):
+    entrada = {"estado": estado, "version": 1, "numero": numero}
+    return {**entrada, "resultado": resultado} if resultado else entrada
+
+
+@pytest.mark.parametrize("resumen,esperado", [
+    ({}, "ABIERTA"),
+    ({"a": _v("CANCELADA")}, "ABIERTA"),
+    ({"a": _v("PROGRAMADA")}, "PROGRAMADA"),
+    ({"a": _v("EN_ATENCION"), "b": _v("PROGRAMADA", 2)}, "EN_ATENCION"),
+    ({"a": _v("FINALIZADA", 1, "RESUELTO")}, "PENDIENTE_DE_CIERRE"),
+    ({"a": _v("FINALIZADA", 1, "REQUIERE_REVISITA")}, "REQUIERE_REVISITA"),
+    ({"a": _v("FINALIZADA", 1, "NO_ATENDIDO")}, "REQUIERE_REVISITA"),
+    ({"a": _v("FINALIZADA", 1, "REQUIERE_REVISITA"), "b": _v("PROGRAMADA", 2)}, "PROGRAMADA"),
+    ({"a": _v("FINALIZADA", 1, "REQUIERE_REVISITA"), "b": _v("FINALIZADA", 2, "RESUELTO")}, "PENDIENTE_DE_CIERRE"),
+    ({"a": _v("FINALIZADA", 1, "RESUELTO"), "b": _v("FINALIZADA", 2, "NO_ATENDIDO")}, "REQUIERE_REVISITA"),
+    ({"a": _v("FINALIZADA", 1, "RESUELTO"), "b": _v("CANCELADA", 2)}, "PENDIENTE_DE_CIERRE"),
+])
+def test_derivar_estado(resumen, esperado):
+    assert dom.derivar_estado(resumen) == esperado
+
+
+# ---- Consumidor
+def _evento_visita(orden_id, tipo, version, visita="V1", numero=1, tenant="CLIMALIMA", event_id=None, **extra):
+    evento = eventos.crear_evento(tipo, tenant, "VISITA", visita, version,
+                                  {"orden_id": orden_id, "visita_id": visita, "numero_visita_orden": numero, **extra},
+                                  event_id=event_id)
+    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+
+
+def _estado(orden_id):
+    return cuerpo(ordenes.detalle(peticion(ctx(), ruta={"orden_id": orden_id}), None))
+
+
+def test_eventos_de_visita_mueven_la_orden_y_su_indice():
+    orden = nueva()["orden_id"]
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
+    assert _estado(orden)["estado"] == "PROGRAMADA"
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaIniciada", 2), None)
+    assert _estado(orden)["estado"] == "EN_ATENCION"
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaCompletada", 3, resultado="RESUELTO"), None)
+    assert _estado(orden)["estado"] == "PENDIENTE_DE_CIERRE"
+
+    lista = cuerpo(ordenes.listar(peticion(ctx(), query={"estado": "PENDIENTE_DE_CIERRE"}), None))
+    assert [o["orden_id"] for o in lista["items"]] == [orden]
+    assert cuerpo(ordenes.listar(peticion(ctx(), query={"estado": "ABIERTA"}), None))["items"] == []
+
+
+def test_evento_atrasado_no_retrocede_el_estado():
+    orden = nueva()["orden_id"]
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaCompletada", 3, resultado="RESUELTO"), None)
+    version = _estado(orden)["version"]
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaIniciada", 2), None)
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
+    actual = _estado(orden)
+    assert actual["estado"] == "PENDIENTE_DE_CIERRE" and actual["version"] == version
+
+
+def test_las_versiones_son_por_visita():
+    orden = nueva()["orden_id"]
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaCompletada", 3, resultado="REQUIERE_REVISITA"), None)
+    assert _estado(orden)["estado"] == "REQUIERE_REVISITA"
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1, visita="V2", numero=2), None)
+    assert _estado(orden)["estado"] == "PROGRAMADA"
+
+
+def test_mensaje_repetido_no_se_aplica_dos_veces():
+    orden = nueva()["orden_id"]
+    mensaje = _evento_visita(orden, "VisitaProgramada", 1, event_id="E1")
+    consumidor.lambda_handler(mensaje, None)
+    version = _estado(orden)["version"]
+    historial = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]
+    consumidor.lambda_handler(mensaje, None)
+    assert _estado(orden)["version"] == version
+    assert len(cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]) == len(historial)
+
+
+def test_orden_terminada_no_cambia_de_estado():
+    orden = nueva()["orden_id"]
+    dynamo.tabla().update_item(Key={"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{orden}"},
+                               UpdateExpression="SET estado = :e", ExpressionAttributeValues={":e": "CANCELADA"})
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaCancelada", 2), None)
+    assert _estado(orden)["estado"] == "CANCELADA"
+
+
+def test_durante_el_cierre_se_actualiza_el_estado_al_que_volveria():
+    orden = nueva()["orden_id"]
+    clave = {"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{orden}"}
+    dynamo.tabla().update_item(Key=clave, UpdateExpression="SET estado = :e, estado_previo = :p",
+                               ExpressionAttributeValues={":e": "CIERRE_EN_PROCESO", ":p": "ABIERTA"})
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
+    item = dynamo.tabla().get_item(Key=clave)["Item"]
+    assert item["estado"] == "CIERRE_EN_PROCESO" and item["estado_previo"] == "PROGRAMADA"
+
+
+def test_conflicto_con_otra_escritura_relee_y_aplica():
+    orden = nueva()["orden_id"]
+    leido = {"veces": 0}
+
+    def transaccion_que_falla_una_vez(operaciones, *a, **k):
+        leido["veces"] += 1
+        if leido["veces"] == 1:
+            raise dynamo.TransaccionCancelada(["None", "ConditionalCheckFailed", "None"])
+        return real(operaciones, *a, **k)
+
+    real = dynamo.transaccion
+    with mock.patch.object(dynamo, "transaccion", side_effect=transaccion_que_falla_una_vez):
+        consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
+    assert leido["veces"] == 2
+    assert _estado(orden)["estado"] == "PROGRAMADA"
+
+
+def test_parte_finalizado_queda_en_el_historial_sin_cambiar_estado():
+    orden = nueva()["orden_id"]
+    evento = eventos.crear_evento("ParteFinalizado", "CLIMALIMA", "PARTE", "P1", 2,
+                                  {"orden_id": orden, "visita_id": "V1", "resultado": "RESUELTO"}, event_id="E9")
+    mensaje = {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+    consumidor.lambda_handler(mensaje, None)
+    consumidor.lambda_handler(mensaje, None)
+    items = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]
+    assert [i["tipo"] for i in items].count("PARTE_FINALIZADO") == 1
+    assert _estado(orden)["estado"] == "ABIERTA"
+
+
+def test_mensajes_invalidos_fallan_para_terminar_en_la_dlq():
+    with pytest.raises(Exception):
+        consumidor.lambda_handler({"Records": [{"body": "x"}]}, None)
+    with pytest.raises(ValueError):
+        consumidor.lambda_handler(_evento_visita("NO-EXISTE", "VisitaProgramada", 1), None)
+    with pytest.raises(ValueError):
+        consumidor.lambda_handler(_evento_visita("X", "OtroEvento", 1), None)

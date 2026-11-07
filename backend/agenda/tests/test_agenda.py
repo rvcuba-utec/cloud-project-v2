@@ -1,3 +1,4 @@
+import json
 from unittest import mock
 
 import pytest
@@ -8,7 +9,7 @@ from trazora_common import dynamo, eventos, interno
 from trazora_common.http import ApiError
 
 from dominio import agenda as dom
-from handlers import control, disponibilidad, visitas
+from handlers import consumidor, control, disponibilidad, visitas
 
 ORDEN = {"estado": "ABIERTA", "tipo_servicio": "REPARACION", "descripcion": "No enfría", "cliente_nombre": "López", "direccion": "Av. 1", "distrito": "Miraflores"}
 TECNICO = {"nombre": "Carlos", "activo": True, "especialidades": ["REPARACION"]}
@@ -372,3 +373,78 @@ def test_bloqueo_tras_cancelar_la_unica_visita():
 def test_otra_operacion_no_reutiliza_bloqueo_ajeno():
     bloquear("OT-9", "OP-1")
     assert bloquear("OT-9", "OP-2")["bloqueada"] is False
+
+
+# ---- Consumidor de ParteFinalizado
+def _parte_finalizado(visita, resultado="RESUELTO", event_id=None, finalizado="2026-11-10T15:45:00Z"):
+    evento = eventos.crear_evento(
+        "ParteFinalizado", "CLIMALIMA", "PARTE", "PAR-1", 2,
+        {"parte_id": "PAR-1", "visita_id": visita["visita_id"], "orden_id": visita["orden_id"],
+         "tecnico_id": visita["tecnico_id"], "resultado": resultado, "finalizado_en": finalizado},
+        event_id=event_id,
+    )
+    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+
+
+def _en_atencion():
+    visita = nueva()
+    iniciada = cuerpo(visitas.iniciar(peticion(ctx(rol="TECNICO", tecnico="T1"), ruta={"visita_id": visita["visita_id"]}), None))
+    assert iniciada["estado"] == "EN_ATENCION"
+    return iniciada
+
+
+def test_parte_finalizado_termina_la_visita_y_anuncia_el_resultado():
+    visita = _en_atencion()
+    with mock.patch.object(eventos, "publicar") as publicar:
+        consumidor.lambda_handler(_parte_finalizado(visita), None)
+    actual = cuerpo(visitas.detalle(peticion(ctx(), ruta={"visita_id": visita["visita_id"]}), None))
+    assert actual["estado"] == "FINALIZADA" and actual["resultado"] == "RESUELTO"
+    assert control_de()["visitas_activas"] == 0
+    evento = publicar.call_args[0][0]
+    assert evento["event_type"] == "VisitaCompletada"
+    assert evento["aggregate_version"] == visita["version"] + 1
+    assert evento["data"]["resultado"] == "RESUELTO" and evento["data"]["numero_visita_orden"] == 1
+
+
+def test_parte_repetido_no_resta_dos_veces():
+    visita = _en_atencion()
+    mensaje = _parte_finalizado(visita, event_id="E1")
+    with mock.patch.object(eventos, "publicar") as publicar:
+        consumidor.lambda_handler(mensaje, None)
+        consumidor.lambda_handler(mensaje, None)
+    assert publicar.call_count == 1
+    assert control_de()["visitas_activas"] == 0
+
+
+def test_repetido_que_coincide_en_la_transaccion_se_absorbe():
+    """Ambos leyeron EN_ATENCION: el segundo se detiene por INBOX, no por el estado."""
+    visita = _en_atencion()
+    mensaje = _parte_finalizado(visita, event_id="E1")
+    dynamo.tabla().put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": "INBOX#E1"})
+    consumidor.lambda_handler(mensaje, None)
+    actual = cuerpo(visitas.detalle(peticion(ctx(), ruta={"visita_id": visita["visita_id"]}), None))
+    assert actual["estado"] == "EN_ATENCION"
+    assert control_de()["visitas_activas"] == 1
+
+
+def test_parte_de_visita_cancelada_registra_el_conflicto_sin_reintentar(capsys):
+    visita = nueva()
+    visitas.cancelar(peticion(ctx(), ruta={"visita_id": visita["visita_id"]}), None)
+    consumidor.lambda_handler(_parte_finalizado(visita), None)
+    assert "conflicto_parte_visita" in capsys.readouterr().out
+    assert control_de()["visitas_activas"] == 0
+
+
+def test_mensaje_invalido_falla_para_terminar_en_la_dlq():
+    with pytest.raises(Exception):
+        consumidor.lambda_handler({"Records": [{"body": "no es json"}]}, None)
+    with pytest.raises(ValueError):
+        consumidor.lambda_handler(_parte_finalizado({"visita_id": "NO", "orden_id": "O", "tecnico_id": "T"}), None)
+
+
+def test_si_publicar_falla_el_evento_queda_para_el_barrido():
+    visita = _en_atencion()
+    with mock.patch.object(eventos, "publicar", side_effect=RuntimeError("SNS caído")):
+        consumidor.lambda_handler(_parte_finalizado(visita), None)
+    pendientes = dynamo.consultar_todo(dynamo.tabla(), "TENANT#CLIMALIMA", eventos.PREFIJO_OUTBOX)
+    assert [p["evento"]["event_type"] for p in pendientes] == ["VisitaCompletada"]

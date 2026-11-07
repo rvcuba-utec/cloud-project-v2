@@ -11,7 +11,7 @@ from trazora_common.http import (
 )
 
 from dominio.agenda import (
-    CANCELADA, EN_ATENCION, PROGRAMADA, a_utc, bloques, claves_indices, dentro_de_jornada,
+    CANCELADA, EN_ATENCION, PROGRAMADA, a_utc, bloques, claves_indices, datos_evento, dentro_de_jornada,
     fecha_lima, hora_lima, iso, leer_instante, sk_bloque, sk_control, sk_visita, validar_fecha, validar_horario,
 )
 
@@ -103,14 +103,6 @@ def _version(datos):
     return version
 
 
-def _datos_evento(visita, **extra):
-    return {
-        "orden_id": visita["orden_id"], "visita_id": visita["visita_id"], "tecnico_id": visita["tecnico_id"],
-        "fecha": visita["fecha"], "inicio": visita["inicio"], "fin": visita["fin"],
-        "numero_visita_orden": int(visita["numero_visita_orden"]), **extra,
-    }
-
-
 @api_handler
 def crear(event, context):
     contexto = obtener_contexto(event)
@@ -143,7 +135,7 @@ def crear(event, context):
             **claves_indices(contexto.tenant_id, tecnico_id, orden_id, inicio, visita_id),
         }
         evento = eventos.crear_evento(
-            "VisitaProgramada", contexto.tenant_id, "VISITA", visita_id, 1, _datos_evento(visita),
+            "VisitaProgramada", contexto.tenant_id, "VISITA", visita_id, 1, datos_evento(visita),
             correlation_id=orden_id,
         )
         pendientes[:] = [evento]
@@ -263,7 +255,7 @@ def reprogramar(event, context):
     nueva = {**visita, **cambios, "version": visita["version"] + 1}
     evento = eventos.crear_evento(
         "VisitaReprogramada", contexto.tenant_id, "VISITA", visita_id, int(nueva["version"]),
-        _datos_evento(nueva, tecnico_anterior=visita["tecnico_id"], fecha_anterior=visita["fecha"]),
+        datos_evento(nueva, tecnico_anterior=visita["tecnico_id"], fecha_anterior=visita["fecha"]),
         correlation_id=visita["orden_id"],
     )
     # Una sola transacción: si algo falla, la reserva anterior sigue intacta.
@@ -303,7 +295,7 @@ def cancelar(event, context):
     nueva = {**visita, "estado": CANCELADA, "version": visita["version"] + 1}
     evento = eventos.crear_evento(
         "VisitaCancelada", contexto.tenant_id, "VISITA", visita_id, int(nueva["version"]),
-        _datos_evento(nueva), correlation_id=visita["orden_id"],
+        datos_evento(nueva), correlation_id=visita["orden_id"],
     )
     operaciones = [
         _actualizar_visita(contexto, visita, PROGRAMADA, ["estado = :nuevo"], {":nuevo": CANCELADA}),
@@ -342,7 +334,7 @@ def iniciar(event, context):
     nueva = {**visita, "estado": EN_ATENCION, "iniciada_en": ahora, "version": visita["version"] + 1}
     evento = eventos.crear_evento(
         "VisitaIniciada", contexto.tenant_id, "VISITA", visita_id, int(nueva["version"]),
-        _datos_evento(nueva), correlation_id=visita["orden_id"],
+        datos_evento(nueva), correlation_id=visita["orden_id"],
     )
     try:
         dynamo.transaccion([

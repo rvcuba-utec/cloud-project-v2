@@ -137,3 +137,16 @@ def ordenar_candidatos(candidatos, metricas):
             candidato = {**candidato, "justificacion": f"{carga} visitas hoy, {tasa} % de resolución sin revisita"}
         resultado.append(candidato)
     return resultado
+
+
+def datos_evento(visita, **extra):
+    return {
+        "orden_id": visita["orden_id"], "visita_id": visita["visita_id"], "tecnico_id": visita["tecnico_id"],
+        "fecha": visita["fecha"], "inicio": visita["inicio"], "fin": visita["fin"],
+        "numero_visita_orden": int(visita["numero_visita_orden"]), **extra,
+    }
+
+
+def duracion_minutos(desde_txt, hasta_txt):
+    desde, hasta = leer_instante(desde_txt, "desde"), leer_instante(hasta_txt, "hasta")
+    return max(0, int((hasta - desde).total_seconds() // 60))

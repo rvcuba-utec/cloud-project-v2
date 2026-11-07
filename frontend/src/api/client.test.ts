@@ -9,7 +9,7 @@ vi.stubGlobal('sessionStorage', {
 vi.stubEnv('VITE_API_ORDENES', 'https://api.ejemplo/dev');
 
 const { api, ApiError, configurarSesionExpirada } = await import('./client');
-const { construirFormulario } = await import('./evidencias');
+const { MAX_BYTES, construirFormulario, problemaDeArchivo } = await import('./evidencias');
 
 const fallar = (ruta: string, servicio: 'ordenes' | 'agenda' = 'ordenes') =>
   api(servicio, ruta).then(
@@ -86,5 +86,18 @@ describe('construirFormulario', () => {
   it('coloca el archivo al final', () => {
     const f = construirFormulario({ url: 'u', fields: { key: 'k', policy: 'p' } }, new Blob(['x']));
     expect([...f.keys()]).toEqual(['key', 'policy', 'file']);
+  });
+});
+
+describe('problemaDeArchivo', () => {
+  it('acepta JPEG y PNG de hasta 5 MB', () => {
+    expect(problemaDeArchivo({ type: 'image/jpeg', size: MAX_BYTES })).toBeNull();
+    expect(problemaDeArchivo({ type: 'image/png', size: 1 })).toBeNull();
+  });
+
+  it('explica el motivo del rechazo', () => {
+    expect(problemaDeArchivo({ type: 'application/pdf', size: 10 })).toContain('JPEG');
+    expect(problemaDeArchivo({ type: 'image/png', size: MAX_BYTES + 1 })).toContain('5 MB');
+    expect(problemaDeArchivo({ type: 'image/png', size: 0 })).toContain('vacío');
   });
 });

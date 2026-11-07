@@ -162,3 +162,63 @@ export const agenda = {
   cancelar: (id: string) => api<Visita>('agenda', `/visitas/${id}/cancelar`, { method: 'POST' }),
   iniciar: (id: string) => api<Visita>('agenda', `/visitas/${id}/iniciar`, { method: 'POST' }),
 };
+
+export type ResultadoParte = 'RESUELTO' | 'REQUIERE_REVISITA' | 'NO_ATENDIDO';
+export type EstadoEvidencia = 'PENDIENTE' | 'CONFIRMADA' | 'RECHAZADA';
+
+export interface Evidencia {
+  evidencia_id: string;
+  estado: EstadoEvidencia;
+  content_type: string;
+  nombre?: string;
+  url?: string;
+}
+
+export interface Parte {
+  parte_id: string;
+  visita_id: string;
+  orden_id: string;
+  tecnico_id: string;
+  tecnico_nombre: string;
+  cliente_nombre: string;
+  direccion: string;
+  distrito: string;
+  fecha: string;
+  numero_visita_orden: number;
+  estado: 'BORRADOR' | 'FINALIZADO';
+  diagnostico: string;
+  tareas: string[];
+  materiales: string[];
+  resultado: ResultadoParte | '';
+  version: number;
+  finalizado_en?: string;
+  evidencias?: Evidencia[];
+}
+
+export interface CambiosParte {
+  diagnostico?: string;
+  tareas?: string[];
+  materiales?: string[];
+  resultado?: ResultadoParte | '';
+}
+
+export interface FirmaEvidencia {
+  evidencia_id: string;
+  url: string;
+  fields: Record<string, string>;
+}
+
+export const partes = {
+  deVisita: (visitaId: string) => api<Parte>('partes', `/visitas/${visitaId}/parte`),
+  crear: (visitaId: string) => api<Parte>('partes', `/visitas/${visitaId}/partes`, { method: 'POST' }),
+  detalle: (id: string) => api<Parte>('partes', `/partes/${id}`),
+  deOrden: (ordenId: string) => api<Pagina<Parte>>('partes', `/partes${consulta({ orden_id: ordenId, limit: 50 })}`),
+  guardar: (id: string, version: number, cambios: CambiosParte) =>
+    api<Parte>('partes', `/partes/${id}`, { method: 'PUT', body: { ...cambios, version } }),
+  finalizar: (id: string, version: number) =>
+    api<Parte>('partes', `/partes/${id}/finalizar`, { method: 'POST', body: { version } }),
+  solicitarEvidencia: (id: string, datos: { content_type: string; nombre: string }) =>
+    api<FirmaEvidencia>('partes', `/partes/${id}/evidencias`, { method: 'POST', body: datos }),
+  confirmarEvidencia: (evidenciaId: string) =>
+    api<{ evidencia_id: string; estado: EstadoEvidencia }>('partes', `/evidencias/${evidenciaId}/confirmar`, { method: 'POST' }),
+};

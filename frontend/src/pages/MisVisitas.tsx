@@ -1,3 +1,4 @@
+import { Link, useNavigate } from 'react-router';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agenda } from '../api/recursos';
 import { ESPECIALIDADES, ESTADOS_VISITA, horaLima, hoyLima } from '../components/formato';
@@ -5,6 +6,7 @@ import { Boton, Encabezado, MensajeError, Paginador, usePaginacion } from '../co
 
 export default function MisVisitas() {
   const consultas = useQueryClient();
+  const navegar = useNavigate();
   const paginacion = usePaginacion();
   const desde = hoyLima();
   const { data, error, isLoading } = useQuery({
@@ -14,6 +16,7 @@ export default function MisVisitas() {
   });
   const iniciar = useMutation({
     mutationFn: (id: string) => agenda.iniciar(id),
+    onSuccess: (v) => navegar(`/mis-visitas/${v.visita_id}`),
     onSettled: () => consultas.invalidateQueries({ queryKey: ['mis-visitas'] }),
   });
 
@@ -36,6 +39,11 @@ export default function MisVisitas() {
             <p className="mt-1 text-sm text-slate-700">{ESPECIALIDADES[v.tipo_servicio]}: {v.orden_descripcion}</p>
             {v.estado === 'PROGRAMADA' && (
               <Boton className="mt-3 w-full md:w-auto" disabled={iniciar.isPending} onClick={() => iniciar.mutate(v.visita_id)}>Iniciar visita</Boton>
+            )}
+            {(v.estado === 'EN_ATENCION' || v.estado === 'FINALIZADA') && (
+              <Link className="mt-3 inline-block text-sm font-medium text-sky-800 underline" to={`/mis-visitas/${v.visita_id}`}>
+                {v.estado === 'EN_ATENCION' ? 'Continuar la atención' : 'Ver el parte'}
+              </Link>
             )}
           </li>
         ))}
