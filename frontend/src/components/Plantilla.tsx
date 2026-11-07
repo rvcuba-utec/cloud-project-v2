@@ -9,6 +9,7 @@ const ENLACES = [
   { a: '/mis-visitas', texto: 'Mis visitas', roles: ['TECNICO'] },
   { a: '/clientes', texto: 'Clientes', roles: ['ADMIN', 'COORDINADOR'] },
   { a: '/tecnicos', texto: 'Técnicos', roles: ['ADMIN', 'COORDINADOR'] },
+  { a: '/usuarios', texto: 'Usuarios', roles: ['ADMIN'] },
 ];
 
 export default function Plantilla() {

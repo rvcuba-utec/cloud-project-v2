@@ -18,3 +18,5 @@ frontend/dist.zip
 .serverless/
 # Copia de la librería común generada al desplegar
 backend/*/trazora_common/
+tests/e2e/node_modules/
+tests/e2e/resultados/

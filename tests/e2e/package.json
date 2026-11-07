@@ -1,0 +1,9 @@
+{
+  "name": "trazora-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Comprobación en navegador real. No forma parte del despliegue.",
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
+}

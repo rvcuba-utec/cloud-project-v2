@@ -14,6 +14,7 @@ import MisVisitas from './pages/MisVisitas';
 import NuevaOrden from './pages/NuevaOrden';
 import Ordenes from './pages/Ordenes';
 import Panel from './pages/Panel';
+import Usuarios from './pages/Usuarios';
 import Tecnicos from './pages/Tecnicos';
 
 export default function App() {
@@ -33,6 +34,9 @@ export default function App() {
             <Route path="ordenes/nueva" element={<NuevaOrden />} />
             <Route path="ordenes/:id" element={<DetalleOrden />} />
             <Route path="agenda" element={<Agenda />} />
+          </Route>
+          <Route element={<RutaPorRol roles={['ADMIN']} />}>
+            <Route path="usuarios" element={<Usuarios />} />
           </Route>
           <Route element={<RutaPorRol roles={['TECNICO']} />}>
             <Route path="mis-visitas" element={<MisVisitas />} />

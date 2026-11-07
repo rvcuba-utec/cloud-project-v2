@@ -1,3 +1,4 @@
+import type { Rol } from '../auth/AuthContext';
 import { api } from './client';
 
 export interface Pagina<T> {
@@ -249,4 +250,21 @@ export const analitica = {
     api<ResumenMes & { historico: ResumenMes[] }>('analitica', `/analitica/dashboard${consulta({ periodo })}`),
   tecnicos: (fecha: string) =>
     api<{ fecha: string; items: MetricasTecnico[] }>('analitica', `/analitica/tecnicos${consulta({ fecha })}`),
+};
+
+export interface CuentaUsuario {
+  usuario_id: string;
+  email: string;
+  nombre: string;
+  rol: Rol;
+  estado: 'ACTIVO' | 'INACTIVO';
+  tecnico_id?: string;
+}
+
+export const usuarios = {
+  listar: (p: { cursor?: string | null; limit?: number }) => api<Pagina<CuentaUsuario>>('usuarios', `/usuarios${consulta(p)}`),
+  crear: (datos: { nombre: string; email: string; password: string; rol: Rol; tecnico_id?: string }) =>
+    api<CuentaUsuario>('usuarios', '/usuarios', { method: 'POST', body: datos }),
+  actualizar: (id: string, cambios: Partial<CuentaUsuario>) =>
+    api<CuentaUsuario>('usuarios', `/usuarios/${id}`, { method: 'PATCH', body: cambios }),
 };
