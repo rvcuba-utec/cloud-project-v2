@@ -9,7 +9,7 @@ const TODAS = Object.keys(ESPECIALIDADES) as Especialidad[];
 
 export function SelectorEspecialidades({ valor, onCambio }: { valor: Especialidad[]; onCambio: (v: Especialidad[]) => void }) {
   return (
-    <fieldset className="text-sm text-slate-700">
+    <fieldset className="text-sm text-ink">
       <legend className="font-medium">Especialidades</legend>
       <div className="mt-1 flex flex-wrap gap-3">
         {TODAS.map((e) => (
@@ -60,11 +60,11 @@ export default function Tecnicos() {
         </Tarjeta>
       )}
       <MensajeError error={error} />
-      {isLoading ? <p className="text-slate-600">Cargando…</p> : (
+      {isLoading ? <p className="text-muted">Cargando…</p> : (
         <Tabla columnas={['Nombre', 'Especialidades', 'Estado']} vacio={!data?.items.length}>
           {data?.items.map((t) => (
             <tr key={t.tecnico_id}>
-              <td className="px-3 py-2"><Link className="font-medium text-sky-800 underline" to={`/tecnicos/${t.tecnico_id}`}>{t.nombre}</Link></td>
+              <td className="px-3 py-2"><Link className="font-medium text-accent underline" to={`/tecnicos/${t.tecnico_id}`}>{t.nombre}</Link></td>
               <td className="px-3 py-2">{t.especialidades.map((e) => ESPECIALIDADES[e]).join(', ')}</td>
               <td className="px-3 py-2">{t.activo ? 'Activo' : 'Inactivo'}</td>
             </tr>

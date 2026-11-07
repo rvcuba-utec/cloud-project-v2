@@ -47,7 +47,8 @@ try {
   const coord = await entrar(escritorio, 'coordinador', cuenta('CLIMALIMA', 'COORDINADOR'));
   await coord.waitForURL('**/panel');
   await coord.getByRole('heading', { name: 'Rendimiento de técnicos' }).waitFor();
-  await coord.getByText('Órdenes abiertas').waitFor();
+  await coord.getByText('Órdenes en curso').waitFor();
+  await coord.locator('.leaflet-container').waitFor();
   await coord.locator('tbody tr').first().waitFor({ timeout: 30000 });
   await foto(coord, '1-panel');
   paso('Coordinador entra y ve el panel');
@@ -68,7 +69,7 @@ try {
   paso('Crea la orden');
 
   await coord.getByRole('button', { name: 'Programar visita' }).click();
-  const fecha = new Date(Date.now() + 26 * 86400000 - 5 * 3600000).toISOString().slice(0, 10);
+  const fecha = new Date(Date.now() + 12 * 86400000 - 5 * 3600000).toISOString().slice(0, 10);
   await coord.getByLabel('Fecha').fill(fecha);
   const fila = coord.locator('li', { hasText: 'Carlos Villanueva' }).first();
   await fila.waitFor({ timeout: 30000 });
@@ -82,15 +83,9 @@ try {
   const tec = await entrar(telefono, 'tecnico', cuenta('CLIMALIMA', 'TECNICO'));
   await tec.waitForURL('**/mis-visitas');
   const visita = tec.locator('li', { hasText: descripcion });
-  while (!(await visita.count())) {
-    const siguiente = tec.getByRole('button', { name: 'Siguiente' });
-    await tec.waitForTimeout(1500);
-    if (await visita.count()) break;
-    if (await siguiente.isDisabled()) throw new Error('El técnico no ve la visita');
-    await siguiente.click();
-  }
+  await visita.first().waitFor({ timeout: 30000 });
   await sinDesborde(tec, 'mis-visitas');
-  await visita.getByRole('button', { name: 'Iniciar visita' }).click();
+  await visita.first().getByRole('button', { name: 'Iniciar visita' }).click();
   await tec.waitForURL(/\/mis-visitas\/VIS-/);
   await tec.getByLabel('Diagnóstico').waitFor({ timeout: 30000 });
   paso('Técnico, en teléfono, inicia la visita');
@@ -111,7 +106,8 @@ try {
   await tec.getByLabel('Resultado').selectOption('RESUELTO');
   await sinDesborde(tec, 'atencion');
   await foto(tec, '3-atencion-telefono');
-  await tec.getByRole('button', { name: 'Finalizar parte' }).click();
+  await tec.getByRole('button', { name: 'Finalizar parte' }).first().click();
+  await tec.locator('dialog[open]').getByRole('button', { name: 'Finalizar parte' }).click();
   await tec.getByText('Finalizada', { exact: true }).waitFor({ timeout: 40000 });
   await foto(tec, '4-parte-finalizado');
   paso('Finaliza el parte y la visita pasa a Finalizada por eventos');
@@ -136,13 +132,29 @@ try {
 
   // Otras pantallas, también a ancho de teléfono.
   const coordMovil = await entrar(await navegador.newContext({ viewport: { width: 390, height: 844 }, isMobile: true }), 'coordinador-movil', cuenta('CLIMALIMA', 'COORDINADOR'));
-  for (const ruta of ['panel', 'ordenes', 'agenda', 'clientes', 'tecnicos']) {
+  for (const ruta of ['panel', 'ordenes', 'agenda', 'clientes', 'tecnicos', 'tecnicos/TEC-CLIMALIMA-DEMO']) {
     await coordMovil.goto(`${WEB}/${ruta}`);
     await coordMovil.waitForTimeout(2500);
     await sinDesborde(coordMovil, ruta);
-    await foto(coordMovil, `movil-${ruta}`);
+    await foto(coordMovil, `movil-${ruta.replace('/', '-')}`);
   }
   paso('Pantallas revisadas a 390 px');
+  for (const ruta of ['agenda', 'tecnicos/TEC-CLIMALIMA-DEMO', 'usuarios', 'ordenes']) {
+    const p = ruta === 'usuarios' ? admin : coord;
+    await p.goto(`${WEB}/${ruta}`);
+    await p.waitForTimeout(3000);
+    await sinDesborde(p, ruta);
+    await foto(p, `escritorio-${ruta.replace('/', '-')}`);
+  }
+  await coord.goto(`${WEB}/panel`);
+  await coord.locator('.leaflet-marker-pane, .leaflet-overlay-pane path').first().waitFor({ timeout: 20000 });
+  await coord.waitForTimeout(2500);
+  await foto(coord, '6-panel-final');
+  const login = await navegador.newPage({ viewport: { width: 1280, height: 800 } });
+  await login.goto(`${WEB}/login`);
+  await login.waitForTimeout(1500);
+  await foto(login, '0-login');
+  paso('Capturas de agenda, técnico, usuarios, órdenes, panel y login');
 } catch (e) {
   salida = 1;
   console.error(`FALLÓ: ${e.message.split('\n').slice(0, 4).join(' | ')}`);

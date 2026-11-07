@@ -59,11 +59,11 @@ export default function Clientes() {
         <Boton type="submit" variante="secundario">Buscar</Boton>
       </form>
       <MensajeError error={error} />
-      {isLoading ? <p className="text-slate-600">Cargando…</p> : (
+      {isLoading ? <p className="text-muted">Cargando…</p> : (
         <Tabla columnas={['Nombre', 'Teléfono', 'Correo', 'Estado']} vacio={!data?.items.length}>
           {data?.items.map((c) => (
             <tr key={c.cliente_id}>
-              <td className="px-3 py-2"><Link className="font-medium text-sky-800 underline" to={`/clientes/${c.cliente_id}`}>{c.nombre}</Link></td>
+              <td className="px-3 py-2"><Link className="font-medium text-accent underline" to={`/clientes/${c.cliente_id}`}>{c.nombre}</Link></td>
               <td className="px-3 py-2">{c.telefono}</td>
               <td className="px-3 py-2">{c.correo}</td>
               <td className="px-3 py-2">{c.activo ? 'Activo' : 'Inactivo'}</td>

@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tecnicos, usuarios, type CuentaUsuario } from '../api/recursos';
 import type { Rol } from '../auth/AuthContext';
 import { useAuth } from '../auth/AuthContext';
 import { NOMBRE_ROL } from '../auth/roles';
-import { Boton, CAMPO, Campo, Encabezado, MensajeError, Paginador, Tabla, Tarjeta, usePaginacion } from '../components/ui';
+import { Boton, CAMPO, Campo, Encabezado, Insignia, MensajeError, Paginador, Tabla, Tarjeta, usePaginacion } from '../components/ui';
 
 const ROLES = Object.keys(NOMBRE_ROL) as Rol[];
 const VACIO = { nombre: '', email: '', password: '', rol: 'COORDINADOR' as Rol, tecnico_id: '' };
@@ -58,11 +58,21 @@ export default function Usuarios() {
   const { usuario: yo } = useAuth();
   const paginacion = usePaginacion();
   const [creando, setCreando] = useState(false);
-  const { data, error, isLoading } = useQuery({
-    queryKey: ['usuarios', paginacion.cursor],
-    queryFn: () => usuarios.listar({ cursor: paginacion.cursor, limit: 25 }),
+  const [texto, setTexto] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [rol, setRol] = useState('');
+  const [estado, setEstado] = useState('');
+  // La búsqueda espera a que se deje de escribir: cada consulta lee la partición de la empresa.
+  useEffect(() => {
+    const t = setTimeout(() => { setBusqueda(texto.trim()); paginacion.reiniciar(); }, 350);
+    return () => clearTimeout(t);
+  }, [texto]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { data, error, isLoading, isFetching } = useQuery({
+    queryKey: ['usuarios', busqueda, rol, estado, paginacion.cursor],
+    queryFn: () => usuarios.listar({ q: busqueda, rol, estado, cursor: paginacion.cursor, limit: 25 }),
     placeholderData: keepPreviousData,
   });
+  const filtrar = (f: (v: string) => void) => (e: { target: { value: string } }) => { f(e.target.value); paginacion.reiniciar(); };
   const refrescar = () => consultas.invalidateQueries({ queryKey: ['usuarios'] });
   const actualizar = useMutation({
     mutationFn: ({ id, cambios }: { id: string; cambios: Partial<CuentaUsuario> }) => usuarios.actualizar(id, cambios),
@@ -71,28 +81,45 @@ export default function Usuarios() {
 
   return (
     <>
-      <Encabezado titulo="Usuarios y roles">
+      <Encabezado titulo="Usuarios y roles" subtitulo="Quién entra a Trazora en tu empresa y qué puede hacer.">
         {!creando && <Boton onClick={() => setCreando(true)}>Nuevo usuario</Boton>}
       </Encabezado>
       {creando && <NuevoUsuario onCancelar={() => setCreando(false)} onCreado={() => { setCreando(false); refrescar(); }} />}
+      <div className="mb-4 grid gap-3 md:grid-cols-[1fr_200px_200px]">
+        <Campo etiqueta="Buscar por nombre o correo">
+          <input className={CAMPO} type="search" value={texto} placeholder="Ej.: maría o @climalima" onChange={(e) => setTexto(e.target.value)} />
+        </Campo>
+        <Campo etiqueta="Rol">
+          <select className={CAMPO} value={rol} onChange={filtrar(setRol)}>
+            <option value="">Todos</option>
+            {ROLES.map((r) => <option key={r} value={r}>{NOMBRE_ROL[r]}</option>)}
+          </select>
+        </Campo>
+        <Campo etiqueta="Estado">
+          <select className={CAMPO} value={estado} onChange={filtrar(setEstado)}>
+            <option value="">Todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option>
+          </select>
+        </Campo>
+      </div>
+      {isFetching && !isLoading && <p className="mb-2 text-[13px] text-muted">Buscando…</p>}
       <MensajeError error={error} />
       <MensajeError error={actualizar.error} />
-      {isLoading ? <p className="text-slate-600">Cargando…</p> : (
+      {isLoading ? <p className="text-muted">Cargando…</p> : (
         <Tabla columnas={['Nombre', 'Correo', 'Rol', 'Estado', '']} vacio={!data?.items.length}>
           {data?.items.map((u) => {
             const propio = u.usuario_id === yo?.usuario_id; // El backend tampoco permite cambiarse a uno mismo.
             return (
               <tr key={u.usuario_id}>
-                <td className="px-3 py-2 font-medium text-slate-900">{u.nombre}</td>
+                <td className="px-3 py-2 font-medium text-ink">{u.nombre}</td>
                 <td className="px-3 py-2">{u.email}</td>
                 <td className="px-3 py-2">
-                  <select aria-label={`Rol de ${u.nombre}`} className="rounded border border-slate-300 bg-white px-2 py-1 disabled:opacity-60" value={u.rol}
+                  <select aria-label={`Rol de ${u.nombre}`} className="rounded border border-line-strong bg-card px-2 py-1 disabled:opacity-60" value={u.rol}
                     disabled={propio || actualizar.isPending}
                     onChange={(e) => actualizar.mutate({ id: u.usuario_id, cambios: { rol: e.target.value as Rol } })}>
                     {ROLES.map((r) => <option key={r} value={r}>{NOMBRE_ROL[r]}</option>)}
                   </select>
                 </td>
-                <td className="px-3 py-2">{u.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</td>
+                <td><Insignia tono={u.estado === 'ACTIVO' ? 'bien' : 'critico'}>{u.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</Insignia></td>
                 <td className="px-3 py-2 text-right">
                   {!propio && (
                     <Boton variante="secundario" disabled={actualizar.isPending}

@@ -47,22 +47,34 @@ export default function ProgramarVisita({ orden, onProgramada, onCancelar }: {
           </select>
         </Campo>
       </div>
+      {opciones.data?.items[0]?.horarios.length ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent-soft p-4">
+          <p className="text-[15px]">
+            <span className="font-medium">Mejor opción: {opciones.data.items[0].nombre}</span> a las {opciones.data.items[0].horarios[0]}
+            {opciones.data.items[0].justificacion && <span className="block text-muted">{opciones.data.items[0].justificacion}</span>}
+          </p>
+          <Boton flecha disabled={programar.isPending}
+            onClick={() => programar.mutate({ tecnico_id: opciones.data!.items[0].tecnico_id, hora: opciones.data!.items[0].horarios[0] })}>
+            Asignar al mejor técnico
+          </Boton>
+        </div>
+      ) : null}
       <MensajeError error={programar.error} />
       <MensajeError error={opciones.error} />
-      {opciones.isLoading && <p className="text-sm text-slate-600">Buscando técnicos…</p>}
-      {opciones.data?.items.length === 0 && <p className="text-sm text-slate-600">No hay técnicos disponibles ese día.</p>}
+      {opciones.isLoading && <p className="text-sm text-muted">Buscando técnicos…</p>}
+      {opciones.data?.items.length === 0 && <p className="text-sm text-muted">No hay técnicos disponibles ese día.</p>}
       <ul className="space-y-3">
         {opciones.data?.items.map((t, i) => (
-          <li key={t.tecnico_id} className={`rounded-md border p-3 ${i === 0 && t.justificacion ? 'border-sky-400 bg-sky-50' : 'border-slate-200'}`}>
-            <p className="text-sm font-medium text-slate-900">
-              {t.nombre}{i === 0 && t.justificacion && <span className="ml-2 text-sky-800">Sugerido</span>}
+          <li key={t.tecnico_id} className={`rounded-md border p-3 ${i === 0 && t.justificacion ? 'border-accent bg-accent-soft' : 'border-line'}`}>
+            <p className="text-sm font-medium text-ink">
+              {t.nombre}{i === 0 && t.justificacion && <span className="ml-2 text-accent">Sugerido</span>}
             </p>
-            {t.justificacion && <p className="text-sm text-slate-600">{t.justificacion}</p>}
+            {t.justificacion && <p className="text-sm text-muted">{t.justificacion}</p>}
             <div className="mt-2 flex flex-wrap gap-1">
               {t.horarios.map((h) => (
                 <button key={h} type="button" disabled={programar.isPending}
                   onClick={() => programar.mutate({ tecnico_id: t.tecnico_id, hora: h })}
-                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs hover:bg-sky-100 disabled:opacity-50">{h}</button>
+                  className="rounded border border-line-strong bg-card px-2 py-1 text-xs hover:bg-accent-soft disabled:opacity-50">{h}</button>
               ))}
             </div>
           </li>

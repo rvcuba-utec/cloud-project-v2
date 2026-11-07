@@ -36,7 +36,7 @@ export default function NuevaOrden() {
 
   return (
     <>
-      <p className="mb-2 text-sm"><Link className="text-sky-800 underline" to="/ordenes">← Órdenes</Link></p>
+      <p className="mb-2 text-sm"><Link className="text-accent underline" to="/ordenes">← Órdenes</Link></p>
       <Encabezado titulo="Nueva orden de trabajo" />
       <Tarjeta className="max-w-2xl">
         {!cliente ? (
@@ -51,18 +51,18 @@ export default function NuevaOrden() {
             <ul className="mt-2 space-y-1">
               {resultados.data?.items.filter((c) => c.activo).map((c) => (
                 <li key={c.cliente_id}>
-                  <button type="button" className="w-full rounded-md border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  <button type="button" className="w-full rounded-md border border-line px-3 py-2 text-left text-sm hover:bg-surface/50"
                     onClick={() => { setCliente(c); idempotencia.renovar(); }}>{c.nombre}</button>
                 </li>
               ))}
-              {busqueda && resultados.data?.items.length === 0 && <li className="text-sm text-slate-500">Sin resultados. <Link className="text-sky-800 underline" to="/clientes">Registrar cliente</Link></li>}
+              {busqueda && resultados.data?.items.length === 0 && <li className="text-sm text-muted">Sin resultados. <Link className="text-accent underline" to="/clientes">Registrar cliente</Link></li>}
             </ul>
           </form>
         ) : (
           <form onSubmit={(e: FormEvent) => { e.preventDefault(); crear.mutate(); }} className="space-y-3">
-            <p className="text-sm text-slate-700">
+            <p className="text-sm text-ink">
               Cliente: <strong>{cliente.nombre}</strong>{' '}
-              <button type="button" className="text-sky-800 underline" onClick={() => { setCliente(null); setUbicacion(''); }}>cambiar</button>
+              <button type="button" className="text-accent underline" onClick={() => { setCliente(null); setUbicacion(''); }}>cambiar</button>
             </p>
             <MensajeError error={ubicaciones.error} />
             <Campo etiqueta="Ubicación">
@@ -72,7 +72,7 @@ export default function NuevaOrden() {
               </select>
             </Campo>
             {ubicaciones.data?.items.length === 0 && (
-              <p className="text-sm text-amber-900">Este cliente no tiene ubicaciones. <Link className="underline" to={`/clientes/${cliente.cliente_id}`}>Agregar una</Link></p>
+              <p className="text-sm text-warning">Este cliente no tiene ubicaciones. <Link className="underline" to={`/clientes/${cliente.cliente_id}`}>Agregar una</Link></p>
             )}
             <div className="grid gap-3 md:grid-cols-2">
               <Campo etiqueta="Tipo de servicio">

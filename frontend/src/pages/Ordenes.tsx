@@ -3,7 +3,10 @@ import { Link } from 'react-router';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ordenes } from '../api/recursos';
 import { ESTADOS_ORDEN, PRIORIDADES, fechaHora } from '../components/formato';
-import { CAMPO, Encabezado, MensajeError, Paginador, Tabla, usePaginacion } from '../components/ui';
+import { grupoDe } from '../components/MapaOrdenes';
+import { Encabezado, Flecha, Insignia, MensajeError, Paginador, Tabla, usePaginacion } from '../components/ui';
+
+const FILTROS: [string, string][] = [['', 'Todas'], ['ABIERTA', 'Sin atender'], ['REQUIERE_REVISITA', 'Requieren otra visita'], ['PROGRAMADA', 'Programadas'], ['EN_ATENCION', 'En atención'], ['PENDIENTE_DE_CIERRE', 'Por cerrar'], ['CERRADA', 'Cerradas'], ['CANCELADA', 'Canceladas']];
 
 export default function Ordenes() {
   const [estado, setEstado] = useState('');
@@ -16,25 +19,28 @@ export default function Ordenes() {
 
   return (
     <>
-      <Encabezado titulo="Órdenes de trabajo">
-        <Link to="/ordenes/nueva" className="rounded-md bg-sky-800 px-4 py-2 text-sm font-medium text-white hover:bg-sky-900">Nueva orden</Link>
+      <Encabezado titulo="Órdenes de trabajo" subtitulo="De la más reciente a la más antigua.">
+        <Link to="/ordenes/nueva" className="btn btn--primary">Nueva orden<Flecha /></Link>
       </Encabezado>
-      <select aria-label="Filtrar por estado" className={`${CAMPO} mb-3 max-w-xs`} value={estado}
-        onChange={(e) => { setEstado(e.target.value); paginacion.reiniciar(); }}>
-        <option value="">Todos los estados</option>
-        {Object.entries(ESTADOS_ORDEN).map(([valor, texto]) => <option key={valor} value={valor}>{texto}</option>)}
-      </select>
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
+        {FILTROS.map(([valor, texto]) => (
+          <button key={valor} type="button" aria-pressed={estado === valor} onClick={() => { setEstado(valor); paginacion.reiniciar(); }}
+            className={`h-9 rounded-full border px-3 text-[14px] font-medium transition-colors ${estado === valor ? 'border-ink bg-ink text-ground' : 'border-line-strong bg-card text-ink hover:bg-surface/60'}`}>
+            {texto}
+          </button>
+        ))}
+      </div>
       <MensajeError error={error} />
-      {isLoading ? <p className="text-slate-600">Cargando…</p> : (
-        <Tabla columnas={['Cliente', 'Problema', 'Lugar', 'Prioridad', 'Estado', 'Registrada']} vacio={!data?.items.length}>
+      {(
+        <Tabla cargando={isLoading} columnas={['Cliente', 'Problema', 'Lugar', 'Prioridad', 'Estado', 'Registrada']} vacio={!data?.items.length}>
           {data?.items.map((o) => (
             <tr key={o.orden_id}>
-              <td className="px-3 py-2"><Link className="font-medium text-sky-800 underline" to={`/ordenes/${o.orden_id}`}>{o.cliente_nombre}</Link></td>
-              <td className="max-w-xs truncate px-3 py-2">{o.descripcion}</td>
-              <td className="px-3 py-2">{o.distrito}</td>
-              <td className="px-3 py-2">{PRIORIDADES[o.prioridad]}</td>
-              <td className="px-3 py-2">{ESTADOS_ORDEN[o.estado]}</td>
-              <td className="whitespace-nowrap px-3 py-2">{fechaHora(o.creada_en)}</td>
+              <td><Link className="font-medium text-ink hover:underline" to={`/ordenes/${o.orden_id}`}>{o.cliente_nombre}</Link></td>
+              <td className="max-w-xs truncate">{o.descripcion}</td>
+              <td>{o.distrito}</td>
+              <td>{o.prioridad === 'ALTA' ? <Insignia tono="critico">Alta</Insignia> : PRIORIDADES[o.prioridad]}</td>
+              <td><Insignia tono={o.estado === 'CANCELADA' ? 'neutro' : grupoDe(o.estado).tono}>{ESTADOS_ORDEN[o.estado]}</Insignia></td>
+              <td className="whitespace-nowrap text-muted">{fechaHora(o.creada_en)}</td>
             </tr>
           ))}
         </Tabla>

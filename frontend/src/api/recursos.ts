@@ -21,6 +21,8 @@ export interface Ubicacion {
   direccion: string;
   distrito: string;
   referencia?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export type Especialidad = 'INSTALACION' | 'MANTENIMIENTO' | 'REPARACION';
@@ -64,6 +66,9 @@ export interface Orden {
   estado: EstadoOrden;
   version: number;
   creada_en: string;
+  lat?: number;
+  lng?: number;
+  visitas_canceladas?: number;
 }
 
 export interface EntradaHistorial {
@@ -105,6 +110,8 @@ export const tecnicos = {
     api<{ jornadas: Jornada[]; ausencias: Ausencia[] }>('tecnicos', `/tecnicos/${id}/jornadas${consulta({ desde, hasta })}`),
   definirJornada: (id: string, fecha: string, intervalos: Intervalo[]) =>
     api<Jornada>('tecnicos', `/tecnicos/${id}/jornadas/${fecha}`, { method: 'PUT', body: { intervalos } }),
+  disponibles: (fecha: string) =>
+    api<{ fecha: string; items: (Tecnico & { intervalos: Intervalo[] })[] }>('tecnicos', `/tecnicos/disponibles${consulta({ fecha })}`),
   registrarAusencia: (id: string, fecha: string, motivo: string) =>
     api<Ausencia>('tecnicos', `/tecnicos/${id}/ausencias/${fecha}`, { method: 'PUT', body: { motivo } }),
 };
@@ -140,6 +147,10 @@ export interface Visita {
   estado: EstadoVisita;
   numero_visita_orden: number;
   version: number;
+  resultado?: ResultadoParte;
+  requiere_reprogramacion?: boolean;
+  motivo_reprogramacion?: string;
+  reasignada_automaticamente?: boolean;
 }
 
 export interface OpcionTecnico {
@@ -262,9 +273,72 @@ export interface CuentaUsuario {
 }
 
 export const usuarios = {
-  listar: (p: { cursor?: string | null; limit?: number }) => api<Pagina<CuentaUsuario>>('usuarios', `/usuarios${consulta(p)}`),
+  listar: (p: { q?: string; rol?: string; estado?: string; cursor?: string | null; limit?: number }) =>
+    api<Pagina<CuentaUsuario>>('usuarios', `/usuarios${consulta(p)}`),
   crear: (datos: { nombre: string; email: string; password: string; rol: Rol; tecnico_id?: string }) =>
     api<CuentaUsuario>('usuarios', '/usuarios', { method: 'POST', body: datos }),
   actualizar: (id: string, cambios: Partial<CuentaUsuario>) =>
     api<CuentaUsuario>('usuarios', `/usuarios/${id}`, { method: 'PATCH', body: cambios }),
 };
+
+export interface Alerta {
+  visita_id: string;
+  orden_id: string;
+  cliente_nombre: string;
+  direccion: string;
+  distrito: string;
+  tipo_servicio: Especialidad;
+  fecha: string;
+  inicio: string;
+  fin: string;
+  tecnico_id: string;
+  tecnico_nombre: string;
+  motivo: string;
+  creada_en: string;
+}
+
+export interface Aviso {
+  tipo: 'REASIGNADA' | 'SIN_TECNICO';
+  visita_id: string;
+  orden_id: string;
+  cliente_nombre: string;
+  fecha: string;
+  inicio: string;
+  detalle: string;
+  creado_en: string;
+  tecnico_nuevo?: string;
+  tecnico_anterior?: string;
+}
+
+export const alertas = {
+  listar: () => api<{ pendientes: Alerta[]; recientes: Aviso[] }>('agenda', '/alertas'),
+};
+
+export interface PuntoMapa {
+  orden_id: string;
+  estado: EstadoOrden;
+  lat: number;
+  lng: number;
+  cliente_nombre: string;
+  distrito: string;
+  prioridad: Prioridad;
+  tipo_servicio: Especialidad;
+  descripcion: string;
+}
+
+export const mapa = {
+  ordenes: () => api<{ puntos: PuntoMapa[]; conteo: Partial<Record<EstadoOrden, number>>; cerradas_desde: string }>('ordenes', '/ordenes/mapa'),
+};
+
+/** Todas las páginas de una lista acotada (las visitas de un día). */
+export async function todas<T>(pedir: (cursor: string | null) => Promise<Pagina<T>>, maximo = 10): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < maximo; i += 1) {
+    const pagina = await pedir(cursor);
+    items.push(...pagina.items);
+    cursor = pagina.next_cursor;
+    if (!cursor) break;
+  }
+  return items;
+}

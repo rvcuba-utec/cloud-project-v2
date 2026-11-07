@@ -1,85 +1,164 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { agenda, type Visita } from '../api/recursos';
-import { ESTADOS_VISITA, horaLima, hoyLima, instanteLima } from '../components/formato';
-import { Boton, CAMPO, Campo, Encabezado, MensajeError, Paginador, Tabla, usePaginacion } from '../components/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { agenda, tecnicos, todas, type Especialidad, type Visita } from '../api/recursos';
+import { BloqueVisita, Columna, Horas, LeyendaCalendario } from '../components/Calendario';
+import ReprogramarVisita from '../components/ReprogramarVisita';
+import { ESPECIALIDADES, ESTADOS_VISITA, fechaLarga, horaLima, hoyLima, sumarDias } from '../components/formato';
+import { AREA, Boton, CAMPO, Campo, Cargando, Confirmacion, Encabezado, Insignia, MensajeError } from '../components/ui';
 
-function Reprogramar({ visita, onListo, onCerrar }: { visita: Visita; onListo: () => void; onCerrar: () => void }) {
-  const [fecha, setFecha] = useState(visita.fecha);
-  const [hora, setHora] = useState(horaLima(visita.inicio));
-  const duracion = (new Date(visita.fin).getTime() - new Date(visita.inicio).getTime()) / 60000;
-  const guardar = useMutation({
-    mutationFn: () => agenda.reprogramar(visita.visita_id, {
-      inicio: instanteLima(fecha, hora), fin: instanteLima(fecha, hora, duracion), version: visita.version,
-    }),
-    onSuccess: onListo,
-  });
-  return (
-    <div className="space-y-2 p-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <Campo etiqueta="Nueva fecha"><input className={CAMPO} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
-        <Campo etiqueta="Nueva hora"><input className={CAMPO} type="time" step={1800} value={hora} onChange={(e) => setHora(e.target.value)} /></Campo>
-        <Boton disabled={guardar.isPending} onClick={() => guardar.mutate()}>Guardar</Boton>
-        <Boton variante="secundario" onClick={onCerrar}>Cerrar</Boton>
-      </div>
-      <MensajeError error={guardar.error} />
-    </div>
-  );
-}
+const ESPERA_MS = 30_000;
+
+interface ColumnaTecnico { tecnico_id: string; nombre: string; especialidades: Especialidad[]; disponible: boolean; intervalos?: { inicio: string; fin: string }[] }
 
 export default function Agenda() {
   const consultas = useQueryClient();
   const [fecha, setFecha] = useState(hoyLima());
-  const [editando, setEditando] = useState<string | null>(null);
-  const paginacion = usePaginacion();
-  const { data, error, isLoading } = useQuery({
-    queryKey: ['agenda', fecha, paginacion.cursor],
-    queryFn: () => agenda.listar({ fecha, cursor: paginacion.cursor, limit: 25 }),
-    placeholderData: keepPreviousData,
+  const [todos, setTodos] = useState(false);
+  const [especialidad, setEspecialidad] = useState<Especialidad | ''>('');
+  const [elegida, setElegida] = useState<Visita | null>(null);
+  const [reprogramando, setReprogramando] = useState<Visita | null>(null);
+  const [ausente, setAusente] = useState<ColumnaTecnico | null>(null);
+  const [motivo, setMotivo] = useState('Enfermedad');
+  const [esperando, setEsperando] = useState<number | null>(null);
+
+  const visitas = useQuery({
+    queryKey: ['visitas-dia', fecha],
+    queryFn: () => todas((cursor) => agenda.listar({ fecha, cursor, limit: 100 })),
+    refetchInterval: esperando && Date.now() < esperando ? 2000 : 30_000,
   });
-  const refrescar = () => consultas.invalidateQueries({ queryKey: ['agenda'] });
-  const cancelar = useMutation({ mutationFn: (id: string) => agenda.cancelar(id), onSettled: refrescar });
+  const perfiles = useQuery({ queryKey: ['tecnicos-todos'], queryFn: () => todas((cursor) => tecnicos.listar({ cursor, limit: 100 })) });
+  const libres = useQuery({ queryKey: ['tecnicos-disponibles', fecha], queryFn: () => tecnicos.disponibles(fecha) });
+  useEffect(() => { if (esperando && Date.now() > esperando) setEsperando(null); }, [visitas.dataUpdatedAt, esperando]);
+
+  const columnas = useMemo<ColumnaTecnico[]>(() => {
+    const disponibles = new Map(libres.data?.items.map((t) => [t.tecnico_id, t.intervalos]));
+    const conVisitas = new Set(visitas.data?.filter((v) => v.estado !== 'CANCELADA').map((v) => v.tecnico_id));
+    return (perfiles.data ?? [])
+      .filter((t) => t.activo && (!especialidad || t.especialidades.includes(especialidad)))
+      .filter((t) => todos || conVisitas.has(t.tecnico_id))
+      .map((t) => ({ tecnico_id: t.tecnico_id, nombre: t.nombre, especialidades: t.especialidades, disponible: disponibles.has(t.tecnico_id), intervalos: disponibles.get(t.tecnico_id) }))
+      .sort((a, b) => Number(conVisitas.has(b.tecnico_id)) - Number(conVisitas.has(a.tecnico_id)) || Number(b.disponible) - Number(a.disponible) || a.nombre.localeCompare(b.nombre));
+  }, [perfiles.data, libres.data, visitas.data, todos, especialidad]);
+
+  const porTecnico = useMemo(() => {
+    const m = new Map<string, Visita[]>();
+    visitas.data?.forEach((v) => m.set(v.tecnico_id, [...(m.get(v.tecnico_id) ?? []), v]));
+    return m;
+  }, [visitas.data]);
+  const sinTecnico = visitas.data?.filter((v) => v.requiere_reprogramacion && v.estado === 'PROGRAMADA') ?? [];
+
+  const refrescar = () => ['visitas-dia', 'alertas', 'tecnicos-disponibles'].forEach((k) => consultas.invalidateQueries({ queryKey: [k] }));
+  const cancelar = useMutation({ mutationFn: (id: string) => agenda.cancelar(id), onSuccess: () => { setElegida(null); refrescar(); } });
+  const marcarAusente = useMutation({
+    mutationFn: (t: ColumnaTecnico) => tecnicos.registrarAusencia(t.tecnico_id, fecha, motivo),
+    onSuccess: () => { setAusente(null); setEsperando(Date.now() + ESPERA_MS); refrescar(); },
+  });
+  const visitasDelAusente = ausente ? (porTecnico.get(ausente.tecnico_id) ?? []).filter((v) => v.estado === 'PROGRAMADA') : [];
 
   return (
     <>
-      <Encabezado titulo="Agenda" />
-      <div className="mb-3 max-w-xs">
-        <Campo etiqueta="Fecha">
-          <input className={CAMPO} type="date" value={fecha} onChange={(e) => { setFecha(e.target.value); paginacion.reiniciar(); }} />
-        </Campo>
+      <Encabezado titulo="Agenda" subtitulo="Un tablero por día: cada columna es un técnico. Si alguien no puede venir, márcalo ausente y sus visitas se reasignan solas.">
+        <div className="flex items-center gap-1">
+          <Boton variante="secundario" pequeno aria-label="Día anterior" onClick={() => setFecha(sumarDias(fecha, -1))}>←</Boton>
+          <Boton variante="secundario" pequeno onClick={() => setFecha(hoyLima())}>Hoy</Boton>
+          <Boton variante="secundario" pequeno aria-label="Día siguiente" onClick={() => setFecha(sumarDias(fecha, 1))}>→</Boton>
+        </div>
+        <input aria-label="Fecha" className={`${CAMPO} !mt-0 w-44`} type="date" value={fecha} onChange={(e) => e.target.value && setFecha(e.target.value)} />
+      </Encabezado>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="font-display text-2xl mayuscula-inicial">{fechaLarga(fecha)}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <select aria-label="Especialidad" className={`${CAMPO} !mt-0 w-48`} value={especialidad} onChange={(e) => setEspecialidad(e.target.value as Especialidad | '')}>
+            <option value="">Todas las especialidades</option>
+            {Object.entries(ESPECIALIDADES).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+          </select>
+          <label className="flex h-11 items-center gap-2 text-[15px]"><input type="checkbox" className="size-4 accent-[var(--p-accent)]" checked={todos} onChange={(e) => setTodos(e.target.checked)} />Ver todos los técnicos</label>
+        </div>
       </div>
-      <MensajeError error={error} />
-      <MensajeError error={cancelar.error} />
-      {isLoading ? <p className="text-slate-600">Cargando…</p> : (
-        <Tabla columnas={['Horario', 'Técnico', 'Cliente', 'Lugar', 'Estado', 'Acciones']} vacio={!data?.items.length}>
-          {data?.items.map((v) => (
-            <tr key={v.visita_id}>
-              {editando === v.visita_id ? (
-                <td colSpan={6}><Reprogramar visita={v} onCerrar={() => setEditando(null)} onListo={() => { setEditando(null); refrescar(); }} /></td>
-              ) : (
-                <>
-                  <td className="whitespace-nowrap px-3 py-2">{horaLima(v.inicio)}–{horaLima(v.fin)}</td>
-                  <td className="px-3 py-2">{v.tecnico_nombre}</td>
-                  <td className="px-3 py-2"><Link className="text-sky-800 underline" to={`/ordenes/${v.orden_id}`}>{v.cliente_nombre}</Link></td>
-                  <td className="px-3 py-2">{v.distrito}</td>
-                  <td className="px-3 py-2">{ESTADOS_VISITA[v.estado]}</td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    {v.estado === 'PROGRAMADA' && (
-                      <>
-                        <button type="button" className="mr-3 text-sky-800 underline" onClick={() => setEditando(v.visita_id)}>Reprogramar</button>
-                        <button type="button" className="text-red-800 underline" disabled={cancelar.isPending}
-                          onClick={() => { if (window.confirm('¿Cancelar esta visita?')) cancelar.mutate(v.visita_id); }}>Cancelar</button>
-                      </>
-                    )}
-                  </td>
-                </>
-              )}
-            </tr>
-          ))}
-        </Tabla>
+
+      {esperando && (
+        <p role="status" className="entra mb-4 flex items-center gap-2 rounded-xl border border-good/30 bg-good-soft px-4 py-3 text-[15px] text-ink">
+          <span className="size-2 animate-pulse rounded-full bg-good" />Ausencia registrada. Buscando al mejor técnico libre para cada visita…
+        </p>
       )}
-      <Paginador hayAnterior={paginacion.hayAnterior} siguiente={data?.next_cursor} onAnterior={paginacion.anterior} onSiguiente={paginacion.siguiente} />
+      {sinTecnico.length > 0 && (
+        <div className="mb-4 rounded-xl border border-critical/30 bg-critical-soft/70 p-4">
+          <p className="font-medium text-critical">{sinTecnico.length === 1 ? 'Una visita se quedó sin técnico' : `${sinTecnico.length} visitas se quedaron sin técnico`}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sinTecnico.map((v) => <Boton key={v.visita_id} pequeno flecha onClick={() => setReprogramando(v)}>{horaLima(v.inicio)} {v.cliente_nombre}</Boton>)}
+          </div>
+        </div>
+      )}
+
+      <MensajeError error={visitas.error ?? perfiles.error ?? libres.error} />
+      <div className="mb-3"><LeyendaCalendario /></div>
+      {visitas.isLoading || perfiles.isLoading ? <Cargando /> : columnas.length === 0 ? (
+        <div className="card m-nolift items-start">
+          <p className="text-[16px]">No hay visitas este día{especialidad ? ` para ${ESPECIALIDADES[especialidad].toLowerCase()}` : ''}.</p>
+          <Boton variante="secundario" onClick={() => setTodos(true)}>Ver todos los técnicos</Boton>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[20px] border border-line bg-surface/40">
+          <div className="flex min-w-max">
+            <div className="sticky left-0 z-10 bg-ground/95 pt-16"><Horas /></div>
+            {columnas.map((t) => {
+              const propias = (porTecnico.get(t.tecnico_id) ?? []).filter((v) => v.estado !== 'CANCELADA');
+              return (
+                <div key={t.tecnico_id} className="w-44">
+                  <div className={`sticky top-0 flex h-16 flex-col justify-center border-b border-l border-line px-2 ${t.disponible ? 'bg-card' : 'bg-critical-soft'}`}>
+                    <p className="truncate text-[14px] font-medium">{t.nombre}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`text-[12px] ${t.disponible ? 'text-muted' : 'font-medium text-critical'}`}>{t.disponible ? `${propias.length} visitas` : 'No disponible'}</span>
+                      {t.disponible && fecha >= hoyLima() && (
+                        <button type="button" className="text-[12px] font-medium text-critical hover:underline" onClick={() => setAusente(t)}>Marcar ausente</button>
+                      )}
+                    </div>
+                  </div>
+                  <Columna tono={t.disponible ? undefined : 'ausente'} intervalos={t.intervalos}>
+                    {propias.map((v) => <BloqueVisita key={v.visita_id} v={v} onClick={() => setElegida(v)} />)}
+                  </Columna>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {elegida && (
+        <Confirmacion abierta titulo={elegida.cliente_nombre} confirmar="Reprogramar" cancelar="Cerrar"
+          ocupado={elegida.estado !== 'PROGRAMADA' || cancelar.isPending}
+          onCancelar={() => setElegida(null)} onConfirmar={() => { setReprogramando(elegida); setElegida(null); }}>
+          <p className="text-muted">{horaLima(elegida.inicio)}–{horaLima(elegida.fin)} · {elegida.tecnico_nombre} · {elegida.direccion}, {elegida.distrito}</p>
+          <p>{ESPECIALIDADES[elegida.tipo_servicio]}: {elegida.orden_descripcion}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Insignia tono={elegida.requiere_reprogramacion ? 'critico' : elegida.estado === 'FINALIZADA' ? 'bien' : elegida.estado === 'EN_ATENCION' ? 'info' : 'aviso'}>
+              {elegida.requiere_reprogramacion ? 'Sin técnico' : ESTADOS_VISITA[elegida.estado]}
+            </Insignia>
+            {elegida.reasignada_automaticamente && <Insignia tono="bien">Reasignada automáticamente</Insignia>}
+            <Link className="link" to={`/ordenes/${elegida.orden_id}`}>Abrir la orden</Link>
+            {elegida.estado === 'PROGRAMADA' && (
+              <button type="button" className="text-[15px] font-medium text-critical hover:underline" disabled={cancelar.isPending}
+                onClick={() => cancelar.mutate(elegida.visita_id)}>Cancelar la visita</button>
+            )}
+          </div>
+          <MensajeError error={cancelar.error} />
+        </Confirmacion>
+      )}
+
+      {ausente && (
+        <Confirmacion abierta peligro titulo={`${ausente.nombre} no podrá trabajar`} confirmar="Registrar ausencia"
+          ocupado={marcarAusente.isPending} onCancelar={() => setAusente(null)} onConfirmar={() => marcarAusente.mutate(ausente)}>
+          <p>{fechaLarga(fecha)}. {visitasDelAusente.length === 0
+            ? 'No tiene visitas programadas ese día.'
+            : <>Sus <strong>{visitasDelAusente.length} visitas</strong> pasarán solas al técnico libre con menos carga y mejor resolución sin revisita. Si nadie puede, te aparecerán como alerta.</>}
+          </p>
+          <Campo etiqueta="Motivo"><textarea className={AREA} maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)} /></Campo>
+          <MensajeError error={marcarAusente.error} />
+        </Confirmacion>
+      )}
+      {reprogramando && <ReprogramarVisita visita={reprogramando} onCerrar={() => setReprogramando(null)} onHecho={() => { setReprogramando(null); refrescar(); }} />}
     </>
   );
 }
