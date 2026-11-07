@@ -129,3 +129,17 @@ def test_no_agrega_ubicacion_a_cliente_inactivo():
 def test_activo_debe_ser_booleano():
     c = nuevo()
     assert clientes.actualizar(peticion(ctx(), {"activo": "no"}, {"cliente_id": c["cliente_id"]}), None)["statusCode"] == 400
+
+
+def test_ubicacion_con_coordenadas_elegidas_en_el_mapa():
+    c = nuevo()["cliente_id"]
+    datos = {"nombre": "Oficina", "direccion": "Av. 1", "distrito": "Miraflores", "lat": -12.12345678, "lng": -77.03}
+    r = ubicaciones.crear(peticion(ctx(), datos, {"cliente_id": c}), None)
+    assert r["statusCode"] == 201 and cuerpo(r)["lat"] == -12.123457
+
+
+@pytest.mark.parametrize("extra", [{"lat": -12.1}, {"lat": 91, "lng": 0}, {"lat": "x", "lng": 1}, {"lat": True, "lng": 1}])
+def test_coordenadas_invalidas_son_400(extra):
+    c = nuevo()["cliente_id"]
+    datos = {"nombre": "Oficina", "direccion": "Av. 1", "distrito": "Miraflores", **extra}
+    assert ubicaciones.crear(peticion(ctx(), datos, {"cliente_id": c}), None)["statusCode"] == 400

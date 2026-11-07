@@ -231,3 +231,43 @@ def test_yo_devuelve_empresa_sin_datos_privados():
 
 def test_sin_contexto_es_401():
     assert yo.lambda_handler(peticion(), None)["statusCode"] == 401
+
+
+# ---- Búsqueda y filtros
+def listar_con(**query):
+    return cuerpo(listar.lambda_handler(peticion(ctx(), query=query), None))
+
+
+def test_busca_sin_tildes_por_nombre_o_correo_y_filtra_por_rol_y_estado():
+    crear_usuario(email="maria@ejemplo.com", nombre="María Pérez", rol="COORDINADOR")
+    crear_usuario(email="jose@ejemplo.com", nombre="José Ruiz", rol="ADMIN")
+    assert [u["email"] for u in listar_con(q="maria")["items"]] == ["maria@ejemplo.com"]
+    assert [u["email"] for u in listar_con(q="JOSE@")["items"]] == ["jose@ejemplo.com"]
+    assert [u["email"] for u in listar_con(rol="ADMIN")["items"]] == ["jose@ejemplo.com"]
+    assert listar_con(estado="INACTIVO")["items"] == []
+    assert all("busqueda" not in u for u in listar_con()["items"])
+
+
+def test_filtros_paginan_sin_perder_ni_repetir():
+    for i in range(7):
+        crear_usuario(email=f"c{i}@ejemplo.com", nombre=f"Coord {i}", rol="COORDINADOR")
+        crear_usuario(email=f"a{i}@ejemplo.com", nombre=f"Admin {i}", rol="ADMIN")
+    vistos, cursor = [], None
+    while True:
+        pagina = listar_con(rol="COORDINADOR", limit="3", **({"cursor": cursor} if cursor else {}))
+        vistos += [u["email"] for u in pagina["items"]]
+        cursor = pagina["next_cursor"]
+        if not cursor:
+            break
+    assert sorted(vistos) == sorted(f"c{i}@ejemplo.com" for i in range(7))
+
+
+@pytest.mark.parametrize("query", [{"rol": "JEFE"}, {"estado": "BORRADO"}])
+def test_filtros_invalidos_son_400(query):
+    assert listar.lambda_handler(peticion(ctx(), query=query), None)["statusCode"] == 400
+
+
+def test_cambiar_nombre_actualiza_la_busqueda():
+    u = crear_usuario(email="luis@ejemplo.com", nombre="Luis")
+    actualizar.lambda_handler(peticion(ctx(), {"nombre": "Ludovico"}, {"usuario_id": u["usuario_id"]}), None)
+    assert [x["email"] for x in listar_con(q="ludov")["items"]] == ["luis@ejemplo.com"]

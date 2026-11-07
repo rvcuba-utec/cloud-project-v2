@@ -185,3 +185,11 @@ def test_efectos_agrupan_por_item():
     assert set(r) == {"METRICAS#T1", f"DIA#{FECHA}#T1", "DASHBOARD#2026-11"}
     assert r["METRICAS#T1"]["sumas"]["suma_minutos"] == 45
     assert "revisitas_generadas" not in r["METRICAS#T1"]["sumas"]
+
+
+def test_ranking_interno_es_json_y_aislado():
+    aplicar(completada())
+    r = consultas.tecnicos_interno({"tenant_id": "CLIMALIMA", "fecha": FECHA}, None)
+    assert r["items"][0]["tecnico_id"] == "T1"
+    json.dumps(r)
+    assert consultas.tecnicos_interno({"tenant_id": "FRIOSUR", "fecha": FECHA}, None)["items"] == []

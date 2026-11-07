@@ -27,6 +27,15 @@ def _historial(evento, tipo, detalle):
     }}}
 
 
+def _detalle(evento):
+    datos = evento["data"]
+    if datos.get("automatica"):
+        return f"Visita {datos['numero_visita_orden']} reasignada sola: {datos.get('motivo', 'ausencia del técnico')}"
+    if evento["event_type"] == "VisitaCancelada" and datos.get("motivo"):
+        return f"Visita {datos['numero_visita_orden']} cancelada: {datos['motivo'].lower()}"
+    return DETALLE_HISTORIAL[evento["event_type"]].format(n=datos["numero_visita_orden"])
+
+
 def _aplicar_parte(evento):
     detalle = f"Parte finalizado: {RESULTADOS_TEXTO.get(evento['data']['resultado'], evento['data']['resultado'])}"
     try:
@@ -74,7 +83,7 @@ def _aplicar_visita(evento, tabla_ddb):
                 "ExpressionAttributeNames": {"#v": "version"},
                 "ExpressionAttributeValues": valores,
             }},
-            _historial(evento, evento["event_type"], DETALLE_HISTORIAL[evento["event_type"]].format(n=datos["numero_visita_orden"])),
+            _historial(evento, evento["event_type"], _detalle(evento)),
         ]
     try:
         dynamo.transaccion(operaciones)

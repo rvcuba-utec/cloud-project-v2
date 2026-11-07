@@ -373,3 +373,50 @@ def test_mensajes_invalidos_fallan_para_terminar_en_la_dlq():
         consumidor.lambda_handler(_evento_visita("NO-EXISTE", "VisitaProgramada", 1), None)
     with pytest.raises(ValueError):
         consumidor.lambda_handler(_evento_visita("X", "OtroEvento", 1), None)
+
+
+# ---- Cancelación en cascada y mapa
+def test_cancelar_pide_cancelar_visitas_y_informa_cuantas(bloqueo):
+    bloqueo.return_value = {"bloqueada": True, "visitas_activas": 0, "visitas_canceladas": 2}
+    o = nueva()
+    r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 200 and cuerpo(r)["visitas_canceladas"] == 2
+    assert bloqueo.call_args.kwargs["cancelar_programadas"] is True
+
+
+def test_cerrar_no_cancela_visitas(bloqueo):
+    o = nueva()
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    ordenes.cerrar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert bloqueo.call_args.kwargs["cancelar_programadas"] is False
+
+
+def test_cancelar_con_visita_en_atencion_lo_explica(bloqueo):
+    bloqueo.return_value = {"bloqueada": False, "visitas_activas": 1, "visitas_canceladas": 1}
+    o = nueva()
+    r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
+    assert r["statusCode"] == 409 and cuerpo(r)["error"]["codigo"] == "VISITA_EN_ATENCION"
+    assert _guardada(o)["estado"] == "ABIERTA"
+
+
+def test_orden_copia_las_coordenadas_y_aparece_en_el_mapa(aws):
+    aws.return_value = {**UBICACION, "lat": -12.12, "lng": -77.03}
+    o = nueva()
+    aws.return_value = UBICACION
+    nueva()  # Sin coordenadas: cuenta, pero no se dibuja.
+    r = cuerpo(ordenes.mapa(peticion(ctx()), None))
+    assert [p["orden_id"] for p in r["puntos"]] == [o["orden_id"]]
+    assert r["puntos"][0]["lat"] == -12.12 and r["conteo"]["ABIERTA"] == 2
+    assert cuerpo(ordenes.mapa(peticion(ctx(tenant="FRIOSUR")), None))["puntos"] == []
+
+
+def test_mapa_solo_para_gestion():
+    assert ordenes.mapa(peticion(ctx(rol="TECNICO")), None)["statusCode"] == 403
+
+
+def test_historial_dice_que_la_reasignacion_fue_automatica():
+    orden = nueva()["orden_id"]
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaProgramada", 1), None)
+    consumidor.lambda_handler(_evento_visita(orden, "VisitaReprogramada", 2, automatica=True, motivo="Ausencia de Carlos"), None)
+    items = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]
+    assert "reasignada sola: Ausencia de Carlos" in items[0]["detalle"]

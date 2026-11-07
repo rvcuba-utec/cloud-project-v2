@@ -34,6 +34,8 @@ functions:
     handler: handlers/consultas.tecnico
     events:
       - http: { path: 'analitica/tecnicos/{tecnico_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  tecnicosInterno:   # Sin ruta: solo la invoca Agenda con lambda.invoke.
+    handler: handlers/consultas.tecnicos_interno
   consumidor:
     handler: handlers/consumidor.lambda_handler
     timeout: 20

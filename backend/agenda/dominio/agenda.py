@@ -152,3 +152,30 @@ def datos_evento(visita, **extra):
 def duracion_minutos(desde_txt, hasta_txt):
     desde, hasta = leer_instante(desde_txt, "desde"), leer_instante(hasta_txt, "hasta")
     return max(0, int((hasta - desde).total_seconds() // 60))
+
+
+def sk_alerta(visita_id):
+    """Una por visita que espera reprogramación; desaparece al reprogramarla o cancelarla."""
+    return f"ALERTA#{visita_id}"
+
+
+def sk_aviso(instante, visita_id):
+    """Registro de lo que el sistema hizo solo, para mostrarlo en vivo."""
+    return f"AVISO#{instante}#{visita_id}"
+
+
+def elegir_reemplazo(visita, candidatos, metricas, ocupados, excluir):
+    """El mejor técnico que puede tomar la visita a la misma hora: misma especialidad, jornada que la
+    cubre y bloques libres. Entre ellos, el orden de la sugerencia: menos carga, más resolución.
+    Devuelve (candidato, justificación) o (None, None)."""
+    inicio, fin = leer_instante(visita["inicio"], "inicio"), leer_instante(visita["fin"], "fin")
+    horas = {hora_lima(b) for b in bloques(inicio, fin)}
+    posibles = [
+        c for c in candidatos
+        if c["tecnico_id"] != excluir and visita["tipo_servicio"] in c.get("especialidades", [])
+        and dentro_de_jornada(c["intervalos"], inicio, fin) and not horas & ocupados.get(c["tecnico_id"], set())
+    ]
+    if not posibles:
+        return None, None
+    elegido = ordenar_candidatos([{**c, "horarios": []} for c in posibles], metricas)[0]
+    return elegido, elegido.get("justificacion")

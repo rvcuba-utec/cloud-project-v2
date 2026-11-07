@@ -14,7 +14,7 @@ sys.path[:0] = [str(RAIZ / "backend/common"), str(RAIZ / "backend/usuarios")]
 import boto3  # noqa: E402
 
 from trazora_common import dynamo, seguridad  # noqa: E402
-from dominio.usuarios import ACTIVO, SK_EMPRESA, pk, sk_email, sk_usuario  # noqa: E402
+from dominio.usuarios import ACTIVO, SK_EMPRESA, pk, sk_email, sk_usuario, texto_busqueda  # noqa: E402
 
 EMPRESAS = {"CLIMALIMA": "ClimaLima", "FRIOSUR": "FríoSur", "TECNINORTE": "TecniNorte"}
 CUENTAS = [
@@ -86,6 +86,7 @@ def main():
                 {"Put": {"TableName": nombre_tabla, "Item": {
                     "PK": pk(tenant_id), "SK": sk_usuario(usuario_id), "entity_type": "USUARIO",
                     "tenant_id": tenant_id, "usuario_id": usuario_id, "email": email, "nombre": f"{nombre_cuenta} {nombre}",
+                    "busqueda": texto_busqueda(f"{nombre_cuenta} {nombre}", email),
                     "rol": rol, "estado": ACTIVO, "password_hash": seguridad.hash_password(password),
                     "creado_en": dynamo.ahora_iso(), **extra,
                 }}},

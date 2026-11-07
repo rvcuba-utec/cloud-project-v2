@@ -11,7 +11,7 @@ ESTADOS = {ACTIVO, INACTIVO}
 DURACION_SESION_SEGUNDOS = 8 * 3600
 LARGO_MINIMO_PASSWORD = 8
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-PRIVADOS = {"PK", "SK", "password_hash", "entity_type"}
+PRIVADOS = {"PK", "SK", "password_hash", "entity_type", "busqueda"}
 
 
 def pk(tenant_id):
@@ -55,6 +55,14 @@ def validar_estado(estado):
 def validar_password(password):
     if not isinstance(password, str) or len(password) < LARGO_MINIMO_PASSWORD:
         raise entrada_invalida(f"La contraseña debe tener al menos {LARGO_MINIMO_PASSWORD} caracteres")
+
+
+def texto_busqueda(nombre, email):
+    """Sin tildes ni mayúsculas, para buscar por nombre o correo."""
+    import unicodedata
+
+    base = unicodedata.normalize("NFKD", f"{nombre} {email}")
+    return "".join(c for c in base if not unicodedata.combining(c)).lower()
 
 
 def vista_publica(item):

@@ -1,3 +1,4 @@
+import json
 import pytest
 from moto import mock_aws
 
@@ -125,3 +126,50 @@ def test_disponibles_aplica_todos_los_filtros():
 def test_disponibles_valida_entrada():
     assert jornadas.disponibles(peticion(ctx(), query={"fecha": FECHA, "especialidad": "MAGIA"}), None)["statusCode"] == 400
     assert jornadas.disponibles(peticion(ctx(), query={}), None)["statusCode"] == 400
+
+
+# ---- Ausencias y su evento
+import boto3  # noqa: E402
+from unittest import mock  # noqa: E402
+
+from trazora_common import eventos  # noqa: E402
+
+
+@pytest.fixture
+def tema(monkeypatch):
+    eventos.reiniciar()
+    monkeypatch.setenv("TOPIC_ARN", boto3.client("sns").create_topic(Name="e")["TopicArn"])
+    yield
+    eventos.reiniciar()
+
+
+def ausencia(tecnico_id, autorizador=None, fecha=FECHA):
+    return jornadas.registrar_ausencia(peticion(autorizador or ctx(), {"motivo": "Enfermo"}, {"tecnico_id": tecnico_id, "fecha": fecha}), None)
+
+
+def test_ausencia_publica_un_evento_y_repetirla_no_vuelve_a_publicar(tema):
+    t = nuevo()["tecnico_id"]
+    with mock.patch.object(eventos, "publicar") as publicar:
+        assert ausencia(t)["statusCode"] == 201
+        assert ausencia(t)["statusCode"] == 200
+    assert publicar.call_count == 1
+    evento = publicar.call_args[0][0]
+    assert evento["event_type"] == "TecnicoAusente" and evento["data"] == {"tecnico_id": t, "fecha": FECHA, "motivo": "Enfermo"}
+
+
+def test_el_tecnico_reporta_su_propia_ausencia_pero_no_la_de_otro(tema):
+    t, otro = nuevo()["tecnico_id"], nuevo("Ana")["tecnico_id"]
+    propio = ctx(rol="TECNICO", usuario="U9", tecnico=t)
+    assert ausencia(t, propio)["statusCode"] == 201
+    assert ausencia(otro, propio)["statusCode"] == 403
+
+
+def test_ausente_no_es_candidato_interno(tema):
+    t = nuevo()["tecnico_id"]
+    otro = nuevo("Ana")["tecnico_id"]
+    poner_jornada(t)
+    poner_jornada(otro)
+    ausencia(t)
+    r = jornadas.disponibles_interno({"tenant_id": "CLIMALIMA", "fecha": FECHA}, None)
+    assert [c["tecnico_id"] for c in r["items"]] == [otro]
+    json.dumps(r)  # Sin Decimal: es la respuesta de una invocación.

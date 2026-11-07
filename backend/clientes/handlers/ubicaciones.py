@@ -7,7 +7,7 @@ from trazora_common.http import (
     api_handler, conflicto, cuerpo_json, no_encontrado, parametro_query, parametro_ruta, respuesta, texto,
 )
 
-from dominio.clientes import sk_cliente, sk_ubicacion
+from dominio.clientes import coordenadas, sk_cliente, sk_ubicacion
 
 GESTION = (ADMIN, COORDINADOR)
 
@@ -29,6 +29,7 @@ def crear(event, context):
     direccion = texto(datos, "direccion", 300)
     distrito = texto(datos, "distrito", 100)
     referencia = texto(datos, "referencia", 300, obligatorio=False)
+    punto = coordenadas(datos)
 
     def construir():
         if not _cliente(dynamo.tabla(), contexto, cliente_id).get("activo"):
@@ -37,7 +38,7 @@ def crear(event, context):
         item = {
             "PK": contexto.pk, "SK": sk_ubicacion(cliente_id, ubicacion_id), "entity_type": "UBICACION",
             "tenant_id": contexto.tenant_id, "cliente_id": cliente_id, "ubicacion_id": ubicacion_id,
-            "nombre": nombre, "direccion": direccion, "distrito": distrito,
+            "nombre": nombre, "direccion": direccion, "distrito": distrito, **punto,
         }
         if referencia:
             item["referencia"] = referencia

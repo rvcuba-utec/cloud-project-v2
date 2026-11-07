@@ -1,4 +1,4 @@
-"""ParteFinalizado termina la visita y anuncia VisitaCompletada."""
+"""ParteFinalizado termina la visita y anuncia VisitaCompletada; TecnicoAusente reasigna sus visitas."""
 import os
 
 from trazora_common import dynamo, eventos, logs
@@ -9,6 +9,9 @@ from dominio.agenda import EN_ATENCION, FINALIZADA, datos_evento, duracion_minut
 def lambda_handler(event, context):
     """Una excepción devuelve el mensaje a la cola; agotados los intentos, pasa a la DLQ."""
     evento = eventos.leer_mensaje_sqs(event)
+    if evento["event_type"] == "TecnicoAusente":
+        from handlers.reasignacion import lambda_handler_ausencia
+        return lambda_handler_ausencia(evento)
     if evento["event_type"] != "ParteFinalizado":
         raise ValueError(f"Evento no esperado: {evento['event_type']}")
     tenant, datos = evento["tenant_id"], evento["data"]

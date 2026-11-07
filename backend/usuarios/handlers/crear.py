@@ -6,7 +6,7 @@ from trazora_common.auth import ADMIN, obtener_contexto, requiere_rol
 from trazora_common.http import api_handler, conflicto, cuerpo_json, entrada_invalida, respuesta
 
 from dominio.usuarios import (
-    ACTIVO, normalizar_email, sk_email, sk_usuario, validar_password, validar_rol, vista_publica,
+    ACTIVO, normalizar_email, sk_email, sk_usuario, texto_busqueda, validar_password, validar_rol, vista_publica,
 )
 
 
@@ -35,6 +35,7 @@ def lambda_handler(event, context):
         "usuario_id": usuario_id,
         "email": email,
         "nombre": nombre,
+        "busqueda": texto_busqueda(nombre, email),
         "rol": rol,
         "estado": ACTIVO,
         "password_hash": seguridad.hash_password(password),

@@ -359,7 +359,7 @@ def bloquear(orden="OT-1", op="OP-1"):
 
 def test_bloqueo_rechazado_con_visitas_activas():
     nueva()
-    assert bloquear() == {"bloqueada": False, "visitas_activas": 1}
+    assert bloquear() == {"bloqueada": False, "visitas_activas": 1, "visitas_canceladas": 0}
     assert control_de()["acepta_programaciones"] is True
 
 
@@ -454,3 +454,163 @@ def test_si_publicar_falla_el_evento_queda_para_el_barrido():
         consumidor.lambda_handler(_parte_finalizado(visita), None)
     pendientes = dynamo.consultar_todo(dynamo.tabla(), "TENANT#CLIMALIMA", eventos.PREFIJO_OUTBOX)
     assert [p["evento"]["event_type"] for p in pendientes] == ["VisitaCompletada"]
+
+
+
+# ---- Cancelación en cascada
+def test_cancelar_orden_cancela_sus_visitas_programadas_y_bloquea():
+    a = nueva(inicio=I10, fin=I11)
+    nueva(inicio=I11, fin=I12)
+    r = control.bloquear({"tenant_id": "CLIMALIMA", "orden_id": "OT-1", "operacion_id": "OP", "cancelar_programadas": True}, None)
+    assert r == {"bloqueada": True, "visitas_activas": 0, "visitas_canceladas": 2}
+    assert bloques_guardados() == []
+    assert cuerpo(visitas.detalle(peticion(ctx(), ruta={"visita_id": a["visita_id"]}), None))["estado"] == "CANCELADA"
+
+
+def test_cascada_no_toca_una_visita_en_atencion():
+    en_curso = nueva(inicio=I10, fin=I11)
+    visitas.iniciar(peticion(ctx(rol="TECNICO", tecnico="T1"), ruta={"visita_id": en_curso["visita_id"]}), None)
+    nueva(inicio=I11, fin=I12)
+    r = control.bloquear({"tenant_id": "CLIMALIMA", "orden_id": "OT-1", "operacion_id": "OP", "cancelar_programadas": True}, None)
+    assert r == {"bloqueada": False, "visitas_activas": 1, "visitas_canceladas": 1}
+
+
+# ---- Reasignación por ausencia
+from dominio.agenda import elegir_reemplazo  # noqa: E402
+from handlers import alertas, reasignacion  # noqa: E402
+
+CANDIDATOS = [
+    {"tecnico_id": "T2", "nombre": "Ana", "especialidades": ["REPARACION"], "intervalos": JORNADA["jornadas"][0]["intervalos"]},
+    {"tecnico_id": "T3", "nombre": "Beto", "especialidades": ["REPARACION"], "intervalos": JORNADA["jornadas"][0]["intervalos"]},
+    {"tecnico_id": "T4", "nombre": "Ciro", "especialidades": ["INSTALACION"], "intervalos": JORNADA["jornadas"][0]["intervalos"]},
+]
+VISITA_10 = {"inicio": I10, "fin": I11, "tipo_servicio": "REPARACION"}
+
+
+def test_elegir_reemplazo_prefiere_menos_carga_y_respeta_especialidad_y_horario():
+    metricas = {"T2": {"carga_dia": 3, "tasa_resolucion": 0.99}, "T3": {"carga_dia": 1, "tasa_resolucion": 0.8}}
+    elegido, porque = elegir_reemplazo(VISITA_10, CANDIDATOS, metricas, {}, "T1")
+    assert elegido["tecnico_id"] == "T3" and "1 visita ese día" in porque
+    elegido, _ = elegir_reemplazo(VISITA_10, CANDIDATOS, metricas, {"T3": {"10:00"}}, "T1")
+    assert elegido["tecnico_id"] == "T2"
+    assert elegir_reemplazo(VISITA_10, CANDIDATOS, metricas, {"T2": {"10:00"}, "T3": {"10:30"}}, "T1") == (None, None)
+
+
+def test_elegir_reemplazo_fuera_de_jornada_no_sirve():
+    tarde = {**VISITA_10, "inicio": "2026-11-10T23:00:00Z", "fin": "2026-11-11T00:00:00Z"}  # 18:00 en Lima
+    assert elegir_reemplazo(tarde, CANDIDATOS, {}, {}, "T1") == (None, None)
+
+
+def _ausencia(tecnico="T1", fecha="2026-11-10", event_id=None):
+    evento = eventos.crear_evento("TecnicoAusente", "CLIMALIMA", "TECNICO", tecnico, 1,
+                                  {"tecnico_id": tecnico, "fecha": fecha, "motivo": "Enfermo"}, event_id=event_id)
+    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+
+
+@pytest.fixture
+def invocaciones(monkeypatch):
+    monkeypatch.setenv("TECNICOS_FN", "tecnicos-interno")
+    monkeypatch.setenv("ANALITICA_FN", "analitica-interno")
+
+    def invocar(nombre, carga):
+        if nombre == "tecnicos-interno":
+            return {"items": [c for c in CANDIDATOS if c["tecnico_id"] != carga.get("excluir")]}
+        return {"items": [{"tecnico_id": "T2", "carga_dia": 0, "tasa_resolucion": 0.95}, {"tecnico_id": "T3", "carga_dia": 2, "tasa_resolucion": 0.9}]}
+
+    with mock.patch.object(interno, "invocar", side_effect=invocar) as m:
+        yield m
+
+
+def _detalle(visita_id):
+    return cuerpo(visitas.detalle(peticion(ctx(), ruta={"visita_id": visita_id}), None))
+
+
+def test_ausencia_reasigna_al_mejor_y_mueve_los_bloques(invocaciones):
+    v = nueva(inicio=I10, fin=I11)
+    with mock.patch.object(eventos, "publicar") as publicar:
+        r = consumidor.lambda_handler(_ausencia(), None)
+    assert r == {"reasignadas": 1, "alertas": 0}
+    actual = _detalle(v["visita_id"])
+    assert actual["tecnico_id"] == "T2" and actual["tecnico_nombre"] == "Ana" and actual["reasignada_automaticamente"]
+    assert {b.split("#")[2] for b in bloques_guardados()} == {"T2"}
+    evento = publicar.call_args[0][0]
+    assert evento["event_type"] == "VisitaReprogramada" and evento["data"]["automatica"] is True
+    assert evento["data"]["tecnico_anterior"] == "T1"
+    avisos = cuerpo(alertas.listar(peticion(ctx()), None))
+    assert avisos["pendientes"] == [] and avisos["recientes"][0]["tipo"] == "REASIGNADA"
+    assert "Ana" in avisos["recientes"][0]["detalle"]
+
+
+def test_dos_visitas_a_la_misma_hora_no_van_al_mismo_reemplazo(invocaciones):
+    nueva(inicio=I10, fin=I11, orden="OT-1")
+    dynamo.tabla().put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": "BLOQUE#2026-11-10#T9#x", "tecnico_id": "T9", "hora": "x"})
+    with mock.patch.object(interno, "llamar", side_effect=llamar_falso):
+        r2 = programar(inicio=I10, fin=I11, tecnico="T5", orden="OT-2")
+    assert r2["statusCode"] == 201
+    # T5 también se ausenta ese día: sus visitas compiten por los mismos reemplazos.
+    consumidor.lambda_handler(_ausencia(), None)
+    consumidor.lambda_handler(_ausencia(tecnico="T5"), None)
+    tecnicos = sorted({b.split("#")[2] for b in bloques_guardados()} - {"T9"})
+    assert tecnicos == ["T2", "T3"]
+
+
+def test_sin_reemplazo_queda_alerta_y_al_reprogramar_desaparece(invocaciones):
+    invocaciones.side_effect = lambda nombre, carga: {"items": []}
+    v = nueva(inicio=I10, fin=I11)
+    r = consumidor.lambda_handler(_ausencia(), None)
+    assert r == {"reasignadas": 0, "alertas": 1}
+    pendientes = cuerpo(alertas.listar(peticion(ctx()), None))["pendientes"]
+    assert [a["visita_id"] for a in pendientes] == [v["visita_id"]]
+    actual = _detalle(v["visita_id"])
+    assert actual["requiere_reprogramacion"] is True and actual["estado"] == "PROGRAMADA"
+    visitas.reprogramar(peticion(ctx(), {"inicio": I11, "fin": I12, "version": actual["version"]}, ruta={"visita_id": v["visita_id"]}), None)
+    assert cuerpo(alertas.listar(peticion(ctx()), None))["pendientes"] == []
+    assert _detalle(v["visita_id"])["requiere_reprogramacion"] is False
+
+
+def test_cancelar_la_visita_tambien_resuelve_la_alerta(invocaciones):
+    invocaciones.side_effect = lambda nombre, carga: {"items": []}
+    v = nueva()
+    consumidor.lambda_handler(_ausencia(), None)
+    visitas.cancelar(peticion(ctx(), ruta={"visita_id": v["visita_id"]}), None)
+    assert cuerpo(alertas.listar(peticion(ctx()), None))["pendientes"] == []
+
+
+def test_mensaje_repetido_no_reasigna_dos_veces(invocaciones):
+    nueva()
+    mensaje = _ausencia(event_id="E-AUS")
+    consumidor.lambda_handler(mensaje, None)
+    with mock.patch.object(eventos, "publicar") as publicar:
+        r = consumidor.lambda_handler(mensaje, None)
+    assert publicar.call_count == 0
+    assert len(cuerpo(alertas.listar(peticion(ctx()), None))["recientes"]) == 1
+    assert r["reasignadas"] == 0
+
+
+def test_analitica_caida_reasigna_igual(invocaciones):
+    def invocar(nombre, carga):
+        if nombre == "analitica-interno":
+            raise RuntimeError("caída")
+        return {"items": CANDIDATOS}
+    invocaciones.side_effect = invocar
+    v = nueva()
+    assert consumidor.lambda_handler(_ausencia(), None)["reasignadas"] == 1
+    assert _detalle(v["visita_id"])["tecnico_id"] == "T2"  # Alfabético: Ana antes que Beto.
+
+
+def test_ausencia_sin_visitas_no_consulta_a_nadie(invocaciones):
+    assert consumidor.lambda_handler(_ausencia(), None) == {"reasignadas": 0, "alertas": 0}
+    assert invocaciones.call_count == 0
+
+
+def test_otras_fechas_y_visitas_iniciadas_no_se_tocan(invocaciones):
+    otra = nueva(inicio="2026-11-11T15:00:00Z", fin="2026-11-11T16:00:00Z")
+    iniciada = nueva(inicio=I10, fin=I11)
+    visitas.iniciar(peticion(ctx(rol="TECNICO", tecnico="T1"), ruta={"visita_id": iniciada["visita_id"]}), None)
+    consumidor.lambda_handler(_ausencia(), None)
+    assert _detalle(otra["visita_id"])["tecnico_id"] == "T1"
+    assert _detalle(iniciada["visita_id"])["tecnico_id"] == "T1"
+
+
+def test_alertas_solo_para_gestion():
+    assert alertas.listar(peticion(ctx(rol="TECNICO", tecnico="T1")), None)["statusCode"] == 403

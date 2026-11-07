@@ -1,6 +1,6 @@
 import re
 
-from trazora_common import dynamo
+from trazora_common import dynamo, interno
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol
 from trazora_common.http import api_handler, entrada_invalida, parametro_query, parametro_ruta, respuesta
 
@@ -40,11 +40,22 @@ def tecnicos(event, context):
     contexto = obtener_contexto(event)
     requiere_rol(contexto, ADMIN, COORDINADOR)
     fecha = _fecha(event)
+    return respuesta({"fecha": fecha, "items": ranking(contexto.pk, fecha)})
+
+
+def ranking(pk, fecha):
     tabla_ddb = dynamo.tabla()
-    acumulados = {i["tecnico_id"]: i for i in dynamo.consultar_todo(tabla_ddb, contexto.pk, "METRICAS#")}
-    dias = {i["tecnico_id"]: i for i in dynamo.consultar_todo(tabla_ddb, contexto.pk, f"DIA#{fecha}#")}
-    items = [metricas_de_tecnico(t, acumulados.get(t), dias.get(t)) for t in sorted({*acumulados, *dias})]
-    return respuesta({"fecha": fecha, "items": items})
+    acumulados = {i["tecnico_id"]: i for i in dynamo.consultar_todo(tabla_ddb, pk, "METRICAS#")}
+    dias = {i["tecnico_id"]: i for i in dynamo.consultar_todo(tabla_ddb, pk, f"DIA#{fecha}#")}
+    return [metricas_de_tecnico(t, acumulados.get(t), dias.get(t)) for t in sorted({*acumulados, *dias})]
+
+
+def tecnicos_interno(event, context):
+    """Sin ruta: la invoca Agenda con lambda.invoke al reasignar por un evento, sin token de usuario."""
+    fecha = event["fecha"]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
+        raise ValueError("fecha no válida")
+    return interno.serializable({"fecha": fecha, "items": ranking(f"TENANT#{event['tenant_id']}", fecha)})
 
 
 @api_handler

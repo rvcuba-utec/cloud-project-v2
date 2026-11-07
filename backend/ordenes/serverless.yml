@@ -40,6 +40,10 @@ functions:
     handler: handlers/ordenes.actualizar
     events:
       - http: { path: 'ordenes/{orden_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  mapa:
+    handler: handlers/ordenes.mapa
+    events:
+      - http: { path: ordenes/mapa, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
   historial:
     handler: handlers/ordenes.historial
     events:

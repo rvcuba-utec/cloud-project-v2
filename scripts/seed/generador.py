@@ -8,6 +8,7 @@ import importlib.util
 import pathlib
 import random
 import sys
+from decimal import Decimal
 
 RAIZ = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RAIZ / "backend/common"))
@@ -46,6 +47,14 @@ NOMBRES = ("Ana", "Carlos", "Lucía", "Jorge", "María", "Luis", "Rosa", "Pedro"
 APELLIDOS = ("Quispe", "Flores", "Sánchez", "Rojas", "Díaz", "Torres", "Vargas", "Castillo", "Mendoza", "Ramos", "Huamán", "Paredes")
 COMERCIOS = ("Comercial", "Inversiones", "Restaurante", "Clínica", "Hotel", "Bodega", "Oficinas", "Colegio", "Ferretería", "Taller")
 DISTRITOS = ("Miraflores", "San Isidro", "Surco", "La Molina", "Barranco", "Lince", "Jesús María", "San Borja", "Los Olivos", "Ate")
+# Centro aproximado de cada distrito de Lima; cada local cae cerca, para el mapa del panel.
+CENTROS = {
+    "Miraflores": (-12.1211, -77.0297), "San Isidro": (-12.0977, -77.0365), "Surco": (-12.1459, -76.9916),
+    "La Molina": (-12.0866, -76.9367), "Barranco": (-12.1491, -77.0213), "Lince": (-12.0849, -77.0347),
+    "Jesús María": (-12.0750, -77.0446), "San Borja": (-12.1078, -77.0001), "Los Olivos": (-11.9636, -77.0727),
+    "Ate": (-12.0262, -76.9180),
+}
+RADIO_GRADOS = 0.012
 VIAS = ("Av. Arequipa", "Av. Larco", "Jr. Unión", "Av. Benavides", "Calle Las Flores", "Av. La Marina", "Jr. Lampa", "Av. Angamos")
 PROBLEMAS = ("No enfría", "Hace ruido al encender", "Gotea agua", "Instalación de equipo nuevo", "Mantenimiento semestral", "No enciende")
 DIAGNOSTICOS = ("Filtro obstruido", "Falta de refrigerante", "Falla en el compresor", "Drenaje tapado", "Tarjeta electrónica dañada")
@@ -71,6 +80,7 @@ class _Empresa:
     def __init__(self, tenant, semilla, escala, base):
         self.tenant, self.base = tenant, base
         self.azar = random.Random(f"{semilla}-{tenant}")
+        self.azar_mapa = random.Random(f"{semilla}-{tenant}-mapa")
         self.escala = escala
         self.n_tecnicos = max(5, cantidad("tecnicos", escala))
         self.dias = max(40, round(DIAS_BASE * escala))
@@ -127,7 +137,10 @@ class _Empresa:
             nombre = f"{self.azar.choice(COMERCIOS)} {self.azar.choice(APELLIDOS)} {i:05d}"
             direccion = f"{self.azar.choice(VIAS)} {self.azar.randint(100, 3999)}"
             distrito = self.azar.choice(DISTRITOS)
-            self.clientes.append({"cliente_id": cliente_id, "ubicacion_id": ubicacion_id, "nombre": nombre, "direccion": direccion, "distrito": distrito})
+            # Otro sorteador: así las coordenadas no cambian el resto de los datos generados.
+            lat, lng = (c + self.azar_mapa.uniform(-RADIO_GRADOS, RADIO_GRADOS) for c in CENTROS[distrito])
+            punto = {"lat": Decimal(f"{lat:.6f}"), "lng": Decimal(f"{lng:.6f}")}
+            self.clientes.append({"cliente_id": cliente_id, "ubicacion_id": ubicacion_id, "nombre": nombre, "direccion": direccion, "distrito": distrito, **punto})
             self.salida["clientes"].append({
                 "PK": pk, "SK": CLIENTES.sk_cliente(cliente_id), "entity_type": "CLIENTE", "tenant_id": self.tenant,
                 "cliente_id": cliente_id, "nombre": nombre, "telefono": f"9{self.azar.randint(10000000, 99999999)}",
@@ -137,17 +150,18 @@ class _Empresa:
             self.salida["clientes"].append({
                 "PK": pk, "SK": CLIENTES.sk_ubicacion(cliente_id, ubicacion_id), "entity_type": "UBICACION",
                 "tenant_id": self.tenant, "cliente_id": cliente_id, "ubicacion_id": ubicacion_id,
-                "nombre": "Local principal", "direccion": direccion, "distrito": distrito,
+                "nombre": "Local principal", "direccion": direccion, "distrito": distrito, **punto,
             })
 
     def _usuarios(self):
         """Perfiles sin contraseña ni marcador de correo: no pueden iniciar sesión."""
         for i in range(cantidad("usuarios", self.escala)):
             usuario_id = f"USR-{self.tenant}-{i:05d}"
+            email, nombre = f"perfil{i:05d}@{self.tenant.lower()}.example.com", self._nombre_persona()
             item = {
                 "PK": _pk(self.tenant), "SK": USUARIOS.sk_usuario(usuario_id), "entity_type": "USUARIO",
-                "tenant_id": self.tenant, "usuario_id": usuario_id, "email": f"perfil{i:05d}@{self.tenant.lower()}.example.com",
-                "nombre": self._nombre_persona(), "rol": "COORDINADOR", "estado": USUARIOS.INACTIVO,
+                "tenant_id": self.tenant, "usuario_id": usuario_id, "email": email, "busqueda": USUARIOS.texto_busqueda(nombre, email),
+                "nombre": nombre, "rol": "COORDINADOR", "estado": USUARIOS.INACTIVO,
                 "creado_en": f"{self.base - datetime.timedelta(days=self.dias_pasados)}T13:00:00Z",
             }
             if i % 2:
@@ -182,6 +196,7 @@ class _Empresa:
             "PK": _pk(self.tenant), "SK": ORDENES.sk_orden(orden_id), "entity_type": "ORDEN", "tenant_id": self.tenant,
             "orden_id": orden_id, "cliente_id": cliente["cliente_id"], "ubicacion_id": cliente["ubicacion_id"],
             "cliente_nombre": cliente["nombre"], "direccion": cliente["direccion"], "distrito": cliente["distrito"],
+            "lat": cliente["lat"], "lng": cliente["lng"],
             "tipo_servicio": tipo, "descripcion": descripcion, "prioridad": self.azar.choice(sorted(ORDENES.PRIORIDADES)),
             "estado": estado, "version": version, "creada_en": creada_txt,
             "GSI1PK": ORDENES.particion_estado(self.tenant, estado), "GSI1SK": f"{creada_txt}#{orden_id}",

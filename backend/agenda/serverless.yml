@@ -21,6 +21,8 @@ provider:
     TECNICOS_URL: ${cf:api-tecnicos-${sls:stage}.ServiceEndpoint}
     # Vacío hasta desplegar Analítica: Agenda funciona igual, sin justificación de métricas.
     ANALITICA_URL: ${cf:api-analitica-${sls:stage}.ServiceEndpoint, ''}
+    TECNICOS_FN: api-tecnicos-${sls:stage}-disponiblesInterno
+    ANALITICA_FN: api-analitica-${sls:stage}-tecnicosInterno
 
 package:
   patterns: ['!tests/**', '!**/__pycache__/**']
@@ -54,6 +56,10 @@ functions:
     handler: handlers/disponibilidad.consultar
     events:
       - http: { path: disponibilidad, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  alertas:
+    handler: handlers/alertas.listar
+    events:
+      - http: { path: alertas, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
   bloquearOrden:   # Sin ruta: solo la invoca Órdenes con lambda.invoke (H1).
     handler: handlers/control.bloquear
   barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
@@ -65,7 +71,7 @@ functions:
       - schedule: rate(5 minutes)
   consumidor:
     handler: handlers/consumidor.lambda_handler
-    timeout: 20
+    timeout: 60   # Una ausencia puede reasignar varias visitas.
     events:
       - sqs:
           arn: { "Fn::GetAtt": [ColaAgenda, Arn] }
@@ -84,7 +90,7 @@ resources:
         Type: AWS::SQS::Queue
         Properties:
           QueueName: ${sls:stage}-q-agenda
-          VisibilityTimeout: 120   # 6 veces el timeout del consumidor (H22).
+          VisibilityTimeout: 360   # 6 veces el timeout del consumidor (H22).
           RedrivePolicy:
             deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidosAgenda, Arn] }
             maxReceiveCount: 5
@@ -109,7 +115,7 @@ resources:
           Protocol: sqs
           Endpoint: { "Fn::GetAtt": [ColaAgenda, Arn] }
           FilterPolicy:
-            event_type: [ParteFinalizado]
+            event_type: [ParteFinalizado, TecnicoAusente]
       TablaAgenda:
         Type: AWS::DynamoDB::Table
         Properties:

@@ -12,7 +12,7 @@ from trazora_common.http import (
 
 from dominio.agenda import (
     CANCELADA, EN_ATENCION, PROGRAMADA, a_utc, bloques, claves_indices, datos_evento, dentro_de_jornada,
-    fecha_lima, hora_lima, iso, leer_instante, sk_bloque, sk_control, sk_visita, validar_fecha, validar_horario,
+    fecha_lima, hora_lima, iso, leer_instante, sk_alerta, sk_bloque, sk_control, sk_visita, validar_fecha, validar_horario,
 )
 
 GESTION = (ADMIN, COORDINADOR)
@@ -250,7 +250,7 @@ def reprogramar(event, context):
     indices = claves_indices(contexto.tenant_id, tecnico_id, visita["orden_id"], inicio, visita_id)
     cambios = {
         "inicio": iso(inicio), "fin": iso(fin), "fecha": fecha_lima(inicio),
-        "tecnico_id": tecnico_id, "tecnico_nombre": tecnico["nombre"], **indices,
+        "tecnico_id": tecnico_id, "tecnico_nombre": tecnico["nombre"], "requiere_reprogramacion": False, **indices,
     }
     nueva = {**visita, **cambios, "version": visita["version"] + 1}
     evento = eventos.crear_evento(
@@ -269,6 +269,7 @@ def reprogramar(event, context):
         eventos.operacion_outbox(evento),
         *[_put_bloque(contexto, t, b, visita_id) for t, b in nuevos - actuales],
         *[_delete_bloque(contexto, t, b, visita_id) for t, b in actuales - nuevos],
+        _borrar_alerta(contexto, visita_id),
     ]
     try:
         dynamo.transaccion(operaciones)
@@ -292,10 +293,26 @@ def cancelar(event, context):
     if visita["estado"] != PROGRAMADA:
         raise conflicto("ESTADO_NO_PERMITE", "Solo se puede cancelar una visita programada")
 
+    operaciones, evento, nueva = operaciones_cancelar(contexto, visita)
+    try:
+        dynamo.transaccion(operaciones)
+    except dynamo.TransaccionCancelada:
+        raise conflicto("VERSION_DESACTUALIZADA", "La visita cambió. Actualiza e intenta de nuevo.")
+    eventos.publicar_y_borrar(evento)
+    return respuesta(dynamo.vista(nueva))
+
+
+def _borrar_alerta(contexto, visita_id):
+    return {"Delete": {"TableName": _nombre_tabla(), "Key": {"PK": contexto.pk, "SK": sk_alerta(visita_id)}}}
+
+
+def operaciones_cancelar(contexto, visita, motivo=None):
+    """También las usa el cierre en cascada de una orden. contexto solo necesita pk y tenant_id."""
+    visita_id = visita["visita_id"]
     nueva = {**visita, "estado": CANCELADA, "version": visita["version"] + 1}
     evento = eventos.crear_evento(
         "VisitaCancelada", contexto.tenant_id, "VISITA", visita_id, int(nueva["version"]),
-        datos_evento(nueva), correlation_id=visita["orden_id"],
+        datos_evento(nueva, **({"motivo": motivo} if motivo else {})), correlation_id=visita["orden_id"],
     )
     operaciones = [
         _actualizar_visita(contexto, visita, PROGRAMADA, ["estado = :nuevo"], {":nuevo": CANCELADA}),
@@ -308,13 +325,9 @@ def cancelar(event, context):
         eventos.operacion_outbox(evento),
         *[_delete_bloque(contexto, visita["tecnico_id"], b, visita_id)
           for b in bloques(leer_instante(visita["inicio"], "inicio"), leer_instante(visita["fin"], "fin"))],
+        _borrar_alerta(contexto, visita_id),
     ]
-    try:
-        dynamo.transaccion(operaciones)
-    except dynamo.TransaccionCancelada:
-        raise conflicto("VERSION_DESACTUALIZADA", "La visita cambió. Actualiza e intenta de nuevo.")
-    eventos.publicar_y_borrar(evento)
-    return respuesta(dynamo.vista(nueva))
+    return operaciones, evento, nueva
 
 
 @api_handler

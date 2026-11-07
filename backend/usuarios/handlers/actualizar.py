@@ -6,7 +6,7 @@ from trazora_common.http import (
     api_handler, cuerpo_json, entrada_invalida, no_encontrado, parametro_ruta, prohibido, respuesta,
 )
 
-from dominio.usuarios import ROLES, sk_usuario, validar_estado, vista_publica
+from dominio.usuarios import ROLES, sk_usuario, texto_busqueda, validar_estado, vista_publica
 
 CAMPOS = ("nombre", "rol", "estado", "tecnico_id")
 
@@ -36,6 +36,9 @@ def lambda_handler(event, context):
         if not actual.get("tecnico_id"):
             raise entrada_invalida("Una cuenta de técnico requiere tecnico_id")
 
+    if "nombre" in cambios:
+        actual = tabla.get_item(Key=clave).get("Item") or {}
+        cambios["busqueda"] = texto_busqueda(cambios["nombre"], actual.get("email", ""))
     nombres = {f"#{c}": c for c in cambios}
     valores = {f":{c}": v for c, v in cambios.items()}
     try:

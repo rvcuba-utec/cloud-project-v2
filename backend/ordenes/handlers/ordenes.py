@@ -3,6 +3,7 @@ import os
 import uuid
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from trazora_common import dynamo, eventos, idempotencia, interno, logs
@@ -18,6 +19,14 @@ from dominio.ordenes import (
 )
 
 GESTION = (ADMIN, COORDINADOR)
+ESTADOS_MAPA = ("ABIERTA", "REQUIERE_REVISITA", "PROGRAMADA", "EN_ATENCION", "PENDIENTE_DE_CIERRE", "CIERRE_EN_PROCESO")
+MAX_POR_ESTADO = 400
+DIAS_CERRADAS_MAPA = 14
+
+
+def ubicacion_decimal(valor):
+    from decimal import Decimal
+    return Decimal(str(valor))
 
 
 def _validar_ubicacion(event, cliente_id, ubicacion_id):
@@ -55,6 +64,7 @@ def crear(event, context):
             # Copias (H17): las listas no consultan otro servicio por cada fila.
             "cliente_nombre": ubicacion["cliente_nombre"],
             "direccion": ubicacion["direccion"], "distrito": ubicacion["distrito"],
+            **{k: ubicacion_decimal(ubicacion[k]) for k in ("lat", "lng") if ubicacion.get(k) is not None},
             "tipo_servicio": tipo, "descripcion": descripcion, "prioridad": prioridad,
             "estado": ABIERTA, "version": 1, "creada_en": ahora,
             "GSI1PK": particion_estado(contexto.tenant_id, ABIERTA), "GSI1SK": f"{ahora}#{orden_id}",
@@ -199,11 +209,13 @@ def _historial(contexto, orden_id, tipo, detalle):
     }}}
 
 
-def _pedir_bloqueo(contexto, orden_id, operacion_id):
-    """H1: invocación directa, sin ruta pública ni dependencia circular de despliegue."""
+def _pedir_bloqueo(contexto, orden_id, operacion_id, cancelar_programadas=False):
+    """H1: invocación directa, sin ruta pública ni dependencia circular de despliegue.
+    Al cancelar la orden, Agenda cancela antes sus visitas programadas."""
     respuesta_lambda = boto3.client("lambda").invoke(
         FunctionName=os.environ["AGENDA_BLOQUEO_FN"],
-        Payload=json.dumps({"tenant_id": contexto.tenant_id, "orden_id": orden_id, "operacion_id": operacion_id}).encode(),
+        Payload=json.dumps({"tenant_id": contexto.tenant_id, "orden_id": orden_id, "operacion_id": operacion_id,
+                            "cancelar_programadas": cancelar_programadas}).encode(),
     )
     if respuesta_lambda.get("FunctionError"):
         raise RuntimeError("Falló el bloqueo en Agenda")
@@ -247,7 +259,7 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
         raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
 
     try:
-        resultado = _pedir_bloqueo(contexto, orden_id, operacion_id)
+        resultado = _pedir_bloqueo(contexto, orden_id, operacion_id, cancelar_programadas=destino == "CANCELADA")
     except Exception as error:
         logs.error("bloqueo_desconocido", tenant_id=contexto.tenant_id, correlation_id=orden_id, tipo_error=type(error).__name__)
         raise ApiError(503, "CIERRE_PENDIENTE", "No se pudo confirmar con Agenda. Intenta de nuevo.")
@@ -258,6 +270,9 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
                 _cambiar_estado(contexto, orden, orden["estado_previo"], quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
                 _historial(contexto, orden_id, "CIERRE_RECHAZADO", "Rechazado: quedan visitas activas"),
             ])
+            if destino == "CANCELADA":
+                raise conflicto("VISITA_EN_ATENCION", "Hay una visita en atención: termínala antes de cancelar la orden",
+                                visitas_activas=resultado["visitas_activas"], visitas_canceladas=resultado.get("visitas_canceladas", 0))
             raise conflicto("VISITAS_ACTIVAS", "Aún hay visitas programadas o en atención", visitas_activas=resultado["visitas_activas"])
 
         ahora = dynamo.ahora_iso()
@@ -274,7 +289,8 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
         raise conflicto("VERSION_DESACTUALIZADA", "La orden cambió. Actualiza e intenta de nuevo.")
     eventos.publicar_y_borrar(evento)
     logs.info(evento_tipo, tenant_id=contexto.tenant_id, correlation_id=orden_id)
-    return respuesta(dynamo.vista(tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"]))
+    final = dynamo.vista(tabla_ddb.get_item(Key=clave, ConsistentRead=True)["Item"])
+    return respuesta({**final, "visitas_canceladas": resultado.get("visitas_canceladas", 0)})
 
 
 @api_handler
@@ -288,3 +304,37 @@ def cancelar(event, context):
     permitidos = {"ABIERTA", "PROGRAMADA", "REQUIERE_REVISITA", "PENDIENTE_DE_CIERRE"}
     return _terminar(event, "CANCELADA", permitidos, "OrdenCancelada",
                      {"solicitud": "Cancelación solicitada", "fin": "Orden cancelada"})
+
+
+@api_handler
+def mapa(event, context):
+    """Puntos para el mapa del panel: las órdenes vivas y las cerradas en los últimos 14 días.
+    Una consulta por estado al índice GSI1, sin recorrer las 10 000 órdenes históricas."""
+    from datetime import datetime, timedelta, timezone
+
+    contexto = obtener_contexto(event)
+    requiere_rol(contexto, *GESTION)
+    tabla_ddb = dynamo.tabla()
+    desde = (datetime.now(timezone.utc) - timedelta(days=DIAS_CERRADAS_MAPA)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    puntos, conteo = [], {}
+    consultas = [(e, None) for e in ESTADOS_MAPA] + [("CERRADA", desde)]
+    for estado, minimo in consultas:
+        condicion = Key("GSI1PK").eq(particion_estado(contexto.tenant_id, estado))
+        if minimo:
+            condicion &= Key("GSI1SK").gte(minimo)
+        items, inicio = [], None
+        while len(items) < MAX_POR_ESTADO:
+            parametros = {"IndexName": "GSI1", "KeyConditionExpression": condicion, "ScanIndexForward": False}
+            if inicio:
+                parametros["ExclusiveStartKey"] = inicio
+            pagina = tabla_ddb.query(**parametros)
+            items += pagina.get("Items", [])
+            inicio = pagina.get("LastEvaluatedKey")
+            if not inicio:
+                break
+        conteo[estado] = len(items)
+        puntos += [
+            {k: o.get(k) for k in ("orden_id", "estado", "lat", "lng", "cliente_nombre", "distrito", "prioridad", "tipo_servicio", "descripcion")}
+            for o in items[:MAX_POR_ESTADO] if o.get("lat") is not None
+        ]
+    return respuesta({"puntos": puntos, "conteo": conteo, "cerradas_desde": desde})
