@@ -93,7 +93,9 @@ def main():
             nuevas.append([stage, tenant_id, email, password, rol])
 
     if nuevas:
-        filas = guardadas + nuevas
+        # Tras destruir y volver a desplegar un stage, la contraseña vieja ya no sirve: se reemplaza.
+        reemplazadas = {tuple(n[:3]) for n in nuevas}
+        filas = [g for g in guardadas if tuple(g[:3]) not in reemplazadas] + nuevas
         contenido = "# stage empresa correo contraseña rol\n" + "\n".join(" ".join(f) for f in filas) + "\n"
         ARCHIVO.touch(mode=0o600, exist_ok=True)
         ARCHIVO.write_text(contenido, encoding="utf-8")
