@@ -1,0 +1,77 @@
+org: ${env:SLS_ORG}
+service: api-usuarios
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  # H13: el mismo autorizador protege también las rutas de este servicio.
+  autorizador:
+    name: validarToken
+    type: token
+    identitySource: method.request.header.Authorization
+    resultTtlInSeconds: 60
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_usuarios
+    TABLA_SESIONES: ${sls:stage}-t_sesiones
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  validarToken:
+    handler: handlers/validar_token.lambda_handler
+  login:
+    handler: handlers/login.lambda_handler
+    memorySize: 512   # PBKDF2 usa CPU, y esta crece con la memoria
+    events:
+      - http: { path: auth/login, method: post, cors: "${self:custom.cors}" }
+  crear:
+    handler: handlers/crear.lambda_handler
+    memorySize: 512
+    events:
+      - http: { path: usuarios, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.autorizador}" }
+  listar:
+    handler: handlers/listar.lambda_handler
+    events:
+      - http: { path: usuarios, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.autorizador}" }
+  yo:
+    handler: handlers/yo.lambda_handler
+    events:
+      - http: { path: usuarios/me, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.autorizador}" }
+  actualizar:
+    handler: handlers/actualizar.lambda_handler
+    events:
+      - http: { path: 'usuarios/{usuario_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.autorizador}" }
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaUsuarios:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+      TablaSesiones:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLA_SESIONES}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: token_hash, AttributeType: S }
+          KeySchema:
+            - { AttributeName: token_hash, KeyType: HASH }

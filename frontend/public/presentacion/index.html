@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="es" data-type="software" data-radius="soft" data-buttons="arrow" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trazora: gestión de visitas técnicas para empresas de servicio</title>
+<meta name="description" content="Órdenes, agenda por técnico, partes con fotos y reasignación automática cuando un técnico falta, para empresas de servicio técnico.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Trazora: gestión de visitas técnicas para empresas de servicio">
+<meta property="og:description" content="Reparte las órdenes, reserva cada media hora una sola vez y reasigna sola la visita de un técnico ausente.">
+<meta property="og:image" content="share.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#efe9e0">
+<!-- <link rel="canonical" href="https://[dominio de Trazora]/"> : todavía no hay dominio propio -->
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="assets/layout/layout.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<link rel="stylesheet" href="assets/ui/base.css">
+<link rel="stylesheet" href="assets/ui/window/fragment.css">
+<link rel="stylesheet" href="assets/ui/calendar/fragment.css">
+<link rel="stylesheet" href="assets/ui/notify/fragment.css">
+<link rel="stylesheet" href="assets/ui/stat/fragment.css">
+<link rel="stylesheet" href="assets/ui/checklist/fragment.css">
+<style>
+:root {
+  --p-bg: #efe9e0; --p-surface: #e2d9cb; --p-ink: #22261f; --p-muted: #5a5c53;
+  --p-accent: #2e5b44; --p-accent-ink: #ffffff; --p-action: #2e5b44; --p-action-ink: #ffffff;
+  --p-inv-bg: #22261f; --p-inv-surface: #2e322a; --p-inv-ink: #efe9e0; --p-inv-muted: #a19e96;
+  --p-inv-accent: #efe9e0; --p-inv-accent-ink: #22261f; --p-inv-action: #efe9e0; --p-inv-action-ink: #22261f;
+  --font-display: "Instrument Sans", system-ui, sans-serif;
+  --font-text: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500;
+  --display-tracking: -0.028em;
+  --display-tracking-xl: -0.036em;
+  --display-stretch: 96%;
+  --ly-scale: 1.04;
+}
+/* ---- visual del encabezado: el tablero del día (page CSS dentro del visual) */
+.tablero { display: grid; grid-template-columns: 56px repeat(3, minmax(0, 1fr)); background: #f8f4ee; color: #22261f; font: 400 13px/1.3 var(--font-text); }
+.tablero__barra { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgb(34 38 31 / .12); }
+.tablero__barra b { font-weight: 500; } .tablero__barra .sp { flex: 1; } .tablero__barra .chip { padding: 3px 9px; border-radius: 99px; background: #e2d9cb; }
+.tablero__puntos { display: flex; gap: 5px; } .tablero__puntos i { width: 9px; height: 9px; border-radius: 50%; background: rgb(34 38 31 / .18); }
+.tablero__horas { display: grid; grid-auto-rows: 44px; padding-top: 40px; color: #5a5c53; font-size: 12px; text-align: right; padding-right: 8px; }
+.tablero__col { position: relative; min-width: 0; overflow: hidden; border-left: 1px solid rgb(34 38 31 / .1); background: repeating-linear-gradient(transparent 0 43px, rgb(34 38 31 / .07) 43px 44px); background-position: 0 40px; min-height: 216px; }
+.tablero__cab { height: 40px; padding: 6px 10px; white-space: nowrap; overflow: hidden; border-bottom: 1px solid rgb(34 38 31 / .1); background: #f8f4ee; }
+.tablero__cab b { display: block; font-weight: 500; } .tablero__cab span { color: #5a5c53; font-size: 12px; }
+.tablero__col.es-ausente { background-color: #f3dcd4; transition: background-color .4s; }
+/* La visita sale de la columna de Carlos y entra en la de Ana: esa columna no recorta. */
+.tablero__col[data-col="carlos"] { overflow: visible; z-index: 2; }
+.tablero__col.es-ausente .tablero__cab span { color: #a8321f; font-weight: 500; }
+.bloque { position: absolute; left: 6px; right: 6px; height: 38px; padding: 4px 8px; border-radius: 8px; border: 1px solid; font-size: 12px; line-height: 1.25; white-space: nowrap; overflow: hidden; transition: transform .7s cubic-bezier(.65,0,.35,1), background-color .3s; }
+.bloque b { display: block; font-weight: 500; overflow: hidden; text-overflow: clip; } .bloque > span { display: block; color: #5a5c53; } .bloque .n { display: inline; color: inherit; }
+.bloque--prog { background: #f1e3c2; border-color: rgb(138 90 0 / .35); }
+.bloque--ok { background: #d9e9d8; border-color: rgb(47 122 74 / .35); }
+.bloque--alerta { background: #f3dcd4; border-color: #a8321f; }
+.aviso { position: absolute; right: 16px; bottom: 16px; width: 260px; padding: 10px 12px; border-radius: 10px; background: #22261f; color: #efe9e0; font-size: 12px; box-shadow: 0 16px 32px -12px rgb(0 0 0 / .45); opacity: 0; transform: translateY(8px); transition: opacity .3s, transform .3s; }
+.aviso b { display: block; font-weight: 500; font-size: 13px; margin-bottom: 2px; }
+.aviso.se-ve { opacity: 1; transform: none; }
+@media (max-width: 639px) { .tablero { grid-template-columns: 40px repeat(2, minmax(0, 1fr)); font-size: 12px; } .tablero__col[data-col="miguel"] { display: none; } .tablero__barra > span:not(.tablero__puntos):not(.sp) { display: none; } .bloque > span, .bloque .n { display: none; } .aviso { left: 12px; right: 12px; width: auto; } }
+@media (prefers-reduced-motion: reduce) { .bloque, .aviso { transition: none; } }
+/* ---- mapa de la tarjeta (page CSS dentro del visual) */
+.mapa-mini { position: absolute; inset: 0; background:
+  linear-gradient(90deg, transparent 49%, rgb(34 38 31 / .07) 49% 51%, transparent 51%) 0 0 / 64px 64px,
+  linear-gradient(transparent 49%, rgb(34 38 31 / .07) 49% 51%, transparent 51%) 0 0 / 64px 64px, #e8e1d5; }
+.mapa-mini i { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #f8f4ee; translate: -50% -50%; }
+.mapa-mini .r { background: #a8321f; } .mapa-mini .a { background: #b37a14; } .mapa-mini .v { background: #2f7a4a; } .mapa-mini .z { background: #2456b0; }
+.mapa-ley { position: absolute; left: 16px; bottom: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.mapa-ley span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: #f8f4ee; font: 500 13px/1 var(--font-text); color: #22261f; }
+.mapa-ley span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+/* ---- registro de reasignación en la sección oscura */
+.registro { display: grid; gap: 10px; }
+.registro li { display: grid; grid-template-columns: 40px 1fr; align-items: start; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.paso__ico { width: 40px; height: 40px; padding: 9px; border-radius: 10px; background: var(--bg); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.registro b { display: block; font-weight: 500; }
+#funciones .panel { --p-h: 336px; } #funciones .group + .group { padding-top: var(--s-6); }
+/* ---- ventana de producto (receta app-frame) */
+.app.ui { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); margin-top: var(--s-7); background: var(--u-bg); border: 1px solid var(--u-border); border-radius: var(--u-r); box-shadow: var(--u-shadow); }
+.app > .app__pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.app > .app__pane + .app__pane { border-left: 1px solid var(--u-line); }
+.app > .app__pane > .ui-panel { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.app > .app__pane::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; background: linear-gradient(transparent, var(--u-bg)); pointer-events: none; }
+@media (min-width: 1024px) and (max-width: 1279px) { .app.ui { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+@media (max-width: 1023px) {
+  .app.ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .app > .app__pane--list { max-height: 252px; }
+  .app > .app__pane--list::after { display: none; }
+  .app .ui-win__side { display: none; }
+  .app .ui-win__body { grid-template-columns: minmax(0, 1fr); }
+  .app > .app__pane + .app__pane { border-left: 0; border-top: 1px solid var(--u-line); }
+}
+@media (max-width: 639px) {
+  .app.ui { grid-template-rows: minmax(0, 1fr); }
+  .app > .app__pane--list { display: none; }
+  .app > .app__pane + .app__pane { border-top: 0; }
+}
+.hero__lead { color: var(--ink); }
+.close--word .close__word { line-height: 1.05; padding-top: .06em; }
+.registro { gap: 14px; }
+.registro li { min-height: 116px; align-content: center; }
+@media (max-width: 639px) { #funciones .panel { --p-h: 232px; } .registro li { min-height: 0; } }
+</style>
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script src="assets/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="assets/moments/moments.js">
+<link rel="modulepreload" href="assets/moments/lib.js">
+<link rel="modulepreload" href="assets/moments/iris-opens/moment.js">
+</head>
+<body>
+<!--
+  Plan
+  1. Tipo: software (site-kind software). Se vende: gestión de órdenes y visitas técnicas. Compra: la coordinación
+     de una empresa de servicio técnico. Acción principal: Entrar a la demo.
+  2. Sorteo: paleta clay-pine (piedra cálida y verde pino: el taller y el uniforme del técnico de reparación),
+     tipografía instrument, encabezado centred, nav-centre, footer-columns, close-word, ritmo space, botones arrow,
+     marca wordmark, momento iris-opens. Efecto: ninguno en el encabezado (la ventana es el producto real en vivo).
+  hero          una idea: qué es y para quién; la ventana del tablero con una reasignación en bucle; 1 pantalla
+  ventana       las órdenes del día y su calendario en una ventana (app-frame: window + calendar); 1 pantalla
+  funciones     cuatro funciones (features-2x2: mapa, partes, avisos, rendimiento); 2 pantallas
+  reasignacion  cómo se reasigna una visita, en el fondo oscuro; momento iris-opens; 1 pantalla
+  preguntas     preguntas frecuentes, todas abiertas (faq); 1 pantalla
+  cierre        close-word y footer-columns
+  Movimiento: entrada del encabezado (primero el nombre, luego qué hacer); el tablero en bucle muestra la reasignación;
+  iris-opens en Reasignación (separa lo que hace el sistema solo); hover en cada enlace y botón.
+-->
+<header class="nav nav--centre">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">Saltar al contenido</a>
+    <a class="nav__logo" href="#top">Trazora</a>
+    <nav class="nav__links" aria-label="Principal">
+      <div class="nav__item"><a class="nav__link" href="#ventana">Producto</a></div>
+      <div class="nav__item"><a class="nav__link" href="#funciones">Funciones</a></div>
+      <div class="nav__item"><a class="nav__link" href="#reasignacion">Reasignación</a></div>
+      <div class="nav__item"><a class="nav__link" href="#preguntas">Preguntas</a></div>
+    </nav>
+    <div class="nav__actions">
+      <a class="btn btn--primary" href="/login">Entrar a la demo</a>
+    </div>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menú"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--centred" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text">
+      <div class="hero__c">
+        <a class="pill" href="#reasignacion"><span>Proyecto de Cloud Computing, UTEC 2026</span><span class="muted">Ver la reasignación</span></a>
+        <h1 id="hero-h">Agenda de visitas para servicio técnico</h1>
+        <p class="hero__lead">Trazora reparte las órdenes entre tus técnicos, reserva cada media hora una sola vez y, si alguien falta, pasa sus visitas al técnico libre que mejor resuelve.</p>
+        <div class="btn-row"><a class="btn btn--primary" href="/login">Entrar a la demo</a><a class="btn btn--secondary" href="#ventana">Ver el producto</a></div>
+      </div>
+      <div class="hero__window frame--lit" data-m-loop role="img" aria-label="Tablero del día de ClimaLima: Carlos Villanueva se marca ausente y su visita de las 09:00 pasa sola a Ana Huamán">
+        <div class="ly-piece tablero" aria-hidden="true" data-tablero>
+          <div class="tablero__barra"><span class="tablero__puntos"><i></i><i></i><i></i></span><b>Agenda</b><span>martes 10 de noviembre</span><span class="sp"></span><span class="chip">ClimaLima</span></div>
+          <div class="tablero__horas"><span>08:00</span><span>09:00</span><span>10:00</span><span>11:00</span></div>
+          <div class="tablero__col" data-col="carlos"><div class="tablero__cab"><b>Carlos Villanueva</b><span data-estado>3 visitas</span></div>
+            <div class="bloque bloque--ok" style="top:43px"><b>08:00 <span class="n">Hotel Castillo</span></b><span>Miraflores</span></div>
+            <div class="bloque bloque--prog" data-mueve style="top:87px"><b>09:00 <span class="n">Clínica Rojas</span></b><span>San Isidro</span></div>
+            <div class="bloque bloque--prog" data-mueve-2 style="top:175px"><b>11:00 <span class="n">Bodega Díaz</span></b><span>Lince</span></div>
+          </div>
+          <div class="tablero__col" data-col="ana"><div class="tablero__cab"><b>Ana Huamán</b><span>1 visita · 95 %</span></div>
+            <div class="bloque bloque--prog" style="top:131px"><b>10:00 <span class="n">Colegio Paredes</span></b><span>Surco</span></div>
+          </div>
+          <div class="tablero__col" data-col="miguel"><div class="tablero__cab"><b>Miguel Ramos</b><span>2 visitas · 93 %</span></div>
+            <div class="bloque bloque--ok" style="top:43px"><b>08:00 <span class="n">Taller Torres</span></b><span>Ate</span></div>
+            <div class="bloque bloque--prog" style="top:175px"><b>11:00 <span class="n">Oficinas Flores</span></b><span>San Borja</span></div>
+          </div>
+          <div class="aviso" data-aviso><b>Reasignada automáticamente</b>Clínica Rojas, 09:00: pasó de Carlos a Ana. 1 visita ese día, 95 % de resolución sin revisita.</div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="section" id="ventana" aria-labelledby="ventana-h">
+    <div class="wrap grid">
+      <h2 class="span-5" id="ventana-h">Las órdenes del día y su agenda en una ventana</h2>
+      <p class="span-6 start-7">A la izquierda, cada orden con su estado: sin atender, con visita o atendida. A la derecha, la semana del técnico con sus visitas. Una orden pasa a atendida cuando el técnico cierra su parte. <a class="link" href="#reasignacion">Ver qué pasa si alguien falta</a></p>
+      <div class="ui app fill span-12" role="img" aria-label="Lista de órdenes de ClimaLima junto al calendario de visitas de la semana" data-ui-pause-host>
+        <div class="app__pane app__pane--list">
+          <div class="ui ui-panel ui-win" data-ui="window" data-open="Sin atender" data-work="Programando" data-done="Con visita">
+            <div class="ui-win__bar">
+              <span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="ui-win__crumb">Órdenes <i>/</i> <b>Hoy</b></span>
+              <span class="ui-spacer"></span>
+              <span class="ui-win__search" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span class="ui-win__ph">Buscar</span><span class="ui-kbd">/</span></span>
+            </div>
+            <div class="ui-win__body">
+              <nav class="ui-win__side" aria-hidden="true">
+                <span class="ui-win__nav is-on"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M2.5 9h3l1 1.5h3l1-1.5h3"/><path d="M2.5 9 4 3.5h8L13.5 9v3.5h-11z"/></svg>Vivas<em>21</em></span>
+                <span class="ui-win__nav"><svg class="ui-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/></svg>Por cerrar<em>4</em></span>
+                <span class="ui-win__nav"><svg class="ui-icon" viewBox="0 0 16 16"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>Cerradas</span>
+                <span class="ui-win__label">Servicio</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">#</span>Reparación</span>
+                <span class="ui-win__nav"><span class="ui-win__hash">#</span>Instalación</span>
+              </nav>
+              <div class="ui-win__main">
+                <div class="ui-win__cols" aria-hidden="true"><span>Cliente</span><span>Problema</span><span>Estado</span><span>Hace</span></div>
+                <ul class="ui-win__rows">
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="1">CR</span><span class="ui-win__who">Clínica Rojas</span><span class="ui-win__sub">No enfría · San Isidro</span><span class="ui-win__st" data-st>Sin atender</span><span class="ui-win__age">4 min</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="3">HC</span><span class="ui-win__who">Hotel Castillo</span><span class="ui-win__sub">Gotea agua · Miraflores</span><span class="ui-win__st" data-st>Sin atender</span><span class="ui-win__age">12 min</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="4">BD</span><span class="ui-win__who">Bodega Díaz</span><span class="ui-win__sub">Mantenimiento · Lince</span><span class="ui-win__st" data-st>Sin atender</span><span class="ui-win__age">25 min</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="2">CP</span><span class="ui-win__who">Colegio Paredes</span><span class="ui-win__sub">Instalación · Surco</span><span class="ui-win__st is-you" data-st>Revisita</span><span class="ui-win__age">40 min</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="5">OF</span><span class="ui-win__who">Oficinas Flores</span><span class="ui-win__sub">No enciende · San Borja</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">1 h</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="3">TT</span><span class="ui-win__who">Taller Torres</span><span class="ui-win__sub">Hace ruido · Ate</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">2 h</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="1">RM</span><span class="ui-win__who">Restaurante Mendoza</span><span class="ui-win__sub">No enfría · Barranco</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">3 h</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="4">IV</span><span class="ui-win__who">Inversiones Vargas</span><span class="ui-win__sub">Instalación · La Molina</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">5 h</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="2">FQ</span><span class="ui-win__who">Ferretería Quispe</span><span class="ui-win__sub">Mantenimiento · Los Olivos</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">ayer</span></li>
+                  <li class="ui-win__row" data-row><span class="ui-avatar" data-tone="5">CS</span><span class="ui-win__who">Comercial Sánchez</span><span class="ui-win__sub">Gotea agua · Jesús María</span><span class="ui-win__st is-done" data-st>Con visita</span><span class="ui-win__age">ayer</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="app__pane app__pane--open" data-ui-loop>
+          <div class="ui ui-panel ui-calendar" data-ui="calendar" data-start="9" data-end="13" data-month="Nov">
+            <div class="ui-cal__head">
+              <div class="ui-cal__month">Noviembre <span>2026</span></div>
+              <span class="ui-spacer"></span>
+              <span class="ui-chip ui-chip--plain ui-chip--ink" data-cal-range>9 – 13 nov</span>
+              <span class="ui-cal__nav" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M10 4 6 8l4 4"/></svg></span>
+              <span class="ui-cal__nav" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></svg></span>
+            </div>
+            <div class="ui-cal__dow" aria-hidden="true"><span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span></div>
+            <div class="ui-cal__days">
+              <span class="ui-cal__d is-out"><b>26</b></span><span class="ui-cal__d is-out"><b>27</b></span><span class="ui-cal__d is-out"><b>28</b></span><span class="ui-cal__d is-out"><b>29</b></span><span class="ui-cal__d is-out"><b>30</b></span><span class="ui-cal__d is-out"><b>31</b></span><span class="ui-cal__d" data-d="1"><b>1</b></span>
+              <span class="ui-cal__d" data-d="2"><b>2</b></span><span class="ui-cal__d" data-d="3"><b>3</b></span><span class="ui-cal__d" data-d="4"><b>4</b></span><span class="ui-cal__d" data-d="5"><b>5</b></span><span class="ui-cal__d" data-d="6"><b>6</b></span><span class="ui-cal__d" data-d="7"><b>7</b></span><span class="ui-cal__d" data-d="8"><b>8</b></span>
+              <span class="ui-cal__d is-start" data-d="9"><b>9</b></span><span class="ui-cal__d is-today is-in" data-d="10"><b>10</b></span><span class="ui-cal__d is-in" data-d="11"><b>11</b></span><span class="ui-cal__d is-in" data-d="12"><b>12</b></span><span class="ui-cal__d is-end" data-d="13"><b>13</b></span><span class="ui-cal__d" data-d="14"><b>14</b></span><span class="ui-cal__d" data-d="15"><b>15</b></span>
+              <span class="ui-cal__d" data-d="16"><b>16</b></span><span class="ui-cal__d" data-d="17"><b>17</b></span><span class="ui-cal__d is-mark" data-d="18"><b>18</b></span><span class="ui-cal__d" data-d="19"><b>19</b></span><span class="ui-cal__d" data-d="20"><b>20</b></span><span class="ui-cal__d" data-d="21"><b>21</b></span><span class="ui-cal__d" data-d="22"><b>22</b></span>
+              <span class="ui-cal__d" data-d="23"><b>23</b></span><span class="ui-cal__d" data-d="24"><b>24</b></span><span class="ui-cal__d" data-d="25"><b>25</b></span><span class="ui-cal__d" data-d="26"><b>26</b></span><span class="ui-cal__d" data-d="27"><b>27</b></span><span class="ui-cal__d" data-d="28"><b>28</b></span><span class="ui-cal__d" data-d="29"><b>29</b></span>
+            </div>
+            <div class="ui-cal__events">
+              <div class="ui-cal__ev" data-ev="10"><span class="ui-cal__date"><b>10</b><i>nov</i></span><span class="ui-cal__evtext"><span class="ui-cal__evtitle">Clínica Rojas, 10:00</span><span class="ui-cal__evsub">Ana Huamán · reasignada sola</span></span></div>
+              <div class="ui-cal__ev" data-ev="12"><span class="ui-cal__date"><b>12</b><i>nov</i></span><span class="ui-cal__evtext"><span class="ui-cal__evtitle">Colegio Paredes, 09:00</span><span class="ui-cal__evsub">Segunda visita: falta el repuesto</span></span></div>
+              <div class="ui-cal__ev" data-ev="18"><span class="ui-cal__date"><b>18</b><i>nov</i></span><span class="ui-cal__evtitle">Mantenimiento semestral</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section g2" id="funciones" aria-labelledby="funciones-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head">
+          <h2 id="funciones-h">Lo que Trazora hace por tu coordinación. <span class="muted">De la orden al parte con fotos.</span></h2>
+        </div>
+        <div class="grid">
+        <article class="card card--open card--row span-6">
+          <h3>Muestra las órdenes en el mapa</h3>
+          <p>Rojo lo que falta atender, ámbar lo que ya tiene visita y verde lo resuelto, distrito por distrito.</p>
+          <div class="panel panel--inset" role="img" aria-label="Mapa de Lima con órdenes en rojo, ámbar, azul y verde">
+            <div class="mapa-mini" aria-hidden="true">
+              <i class="r" style="left:22%;top:30%"></i><i class="v" style="left:38%;top:52%"></i><i class="a" style="left:55%;top:24%"></i>
+              <i class="v" style="left:64%;top:62%"></i><i class="r" style="left:78%;top:40%"></i><i class="z" style="left:46%;top:38%"></i>
+              <i class="v" style="left:30%;top:70%"></i><i class="a" style="left:84%;top:72%"></i><i class="v" style="left:16%;top:58%"></i>
+            </div>
+            <div class="mapa-ley" aria-hidden="true"><span style="--c:#a8321f">Sin atender 2</span><span style="--c:#b37a14">Con visita 2</span><span style="--c:#2f7a4a">Atendida 4</span></div>
+          </div>
+        </article>
+        <article class="card card--open card--row span-6">
+          <h3>Recoge partes con fotos</h3>
+          <p>El técnico anota diagnóstico y tareas desde el celular y sube fotos de hasta 5 MB.</p>
+          <div class="panel panel--inset">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--ay: calc(100% - 180px); --ay-sm: calc(100% - 180px)">
+              <div class="ui ui-panel ui-checks" data-ui="checklist">
+                <div class="ui-checks__head"><div class="ui-title">Parte · Hotel Castillo</div><span class="ui-spacer"></span><div class="ui-meta" data-checks-count>2 de 4</div></div>
+                <div class="ui-checks__bar"><i data-checks-bar style="--k:0.5"></i></div>
+                <ul class="ui-checks__list">
+                  <li class="ui-check is-done"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">Diagnóstico: filtro obstruido</span></li>
+                  <li class="ui-check is-done"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">Limpieza de filtro</span></li>
+                  <li class="ui-check"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">Foto del equipo funcionando</span></li>
+                  <li class="ui-check"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">Resultado: resuelto</span></li>
+                </ul>
+              </div>
+            </div></div>
+          </div>
+        </article>
+        </div>
+      </div>
+      <div class="group">
+        <div class="grid">
+        <article class="card card--open card--row span-6">
+          <h3>Avisa cuando falta un técnico</h3>
+          <p>Si nadie puede tomar una visita a esa hora, aparece como alerta con su ventana de reprogramación.</p>
+          <div class="panel panel--inset">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--ay: calc(100% - 180px); --ay-sm: calc(100% - 180px)">
+              <div class="ui ui-notify" data-ui="notify">
+                <ul class="ui-notify__list" data-notify-list>
+                  <li class="ui-note"><span class="ui-avatar ui-note__av" data-tone="1">CR</span><span class="ui-note__text"><span class="ui-note__title">Reasignada a Ana<time>ahora</time></span><span class="ui-note__body">Clínica Rojas, 10:00</span></span></li>
+                  <li class="ui-note"><span class="ui-avatar ui-note__av" data-tone="4">BD</span><span class="ui-note__text"><span class="ui-note__title">Sin técnico libre<time>1 min</time></span><span class="ui-note__body">Bodega Díaz, 12:00</span></span><span class="ui-btn ui-btn--sm ui-note__btn">Reprogramar</span></li>
+                  <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg></span><span class="ui-note__text"><span class="ui-note__title">Carlos marcó ausencia<time>2 min</time></span><span class="ui-note__body">Enfermedad, martes 10</span></span></li>
+                </ul>
+              </div>
+            </div></div>
+          </div>
+        </article>
+        <article class="card card--open card--row span-6">
+          <h3>Mide la resolución sin revisita</h3>
+          <p>Cada técnico suma visitas, tiempo medio y cuántas veces resolvió a la primera.</p>
+          <div class="panel panel--inset">
+            <div class="stage stage--fade-b"><div class="at-rise fit to-edge">
+              <div class="ui ui-panel ui-stat" data-ui="stat" data-from="88" data-to="95" data-suffix=" %" data-ui-opts='{"fill":true}'>
+                <div class="ui-stat__head">
+                  <div class="ui-stat__top"><span class="ui-stat__label">Resolución sin revisita · Ana Huamán</span></div>
+                  <div class="ui-stat__line"><span class="ui-stat__num" data-stat-num>95 %</span><span class="ui-stat__sub">de 200 primeras visitas</span></div>
+                </div>
+                <div class="ui-stat__chart">
+                  <svg class="ui-stat__svg" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true">
+                    <path class="ui-stat__grid" d="M0 30.5H400M0 60.5H400M0 90.5H400"/>
+                    <path class="ui-stat__cover" fill-rule="evenodd" d=""/>
+                    <g class="ui-stat__bars"><rect rx="3" x="0.00" y="49.04" width="21.14" height="70.96"/><rect rx="3" x="29.14" y="40.86" width="21.14" height="79.14"/><rect rx="3" x="58.29" y="44.95" width="21.14" height="75.05"/><rect rx="3" x="87.43" y="36.76" width="21.14" height="83.24"/><rect rx="3" x="116.57" y="42.22" width="21.14" height="77.78"/><rect rx="3" x="145.71" y="34.04" width="21.14" height="85.96"/><rect rx="3" x="174.86" y="38.13" width="21.14" height="81.87"/><rect rx="3" x="204.00" y="29.94" width="21.14" height="90.06"/><rect rx="3" x="233.14" y="35.40" width="21.14" height="84.60"/><rect rx="3" x="262.29" y="25.85" width="21.14" height="94.15"/><rect rx="3" x="291.43" y="31.31" width="21.14" height="88.69"/><rect rx="3" x="320.57" y="23.12" width="21.14" height="96.88"/></g>
+                  </svg>
+                  <div class="ui-stat__axis" aria-hidden="true"><span>Ago</span><span>Sep</span><span>Hoy</span></div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section ground-inverse" id="reasignacion" data-moment="iris-opens" data-moment-opts='{"from": "base"}' aria-labelledby="reasignacion-h">
+    <div class="wrap grid">
+      <div class="span-5 stack-5">
+        <h2 id="reasignacion-h">Si un técnico falta, sus visitas cambian de manos solas. <span class="muted">Con la razón a la vista.</span></h2>
+        <p>El coordinador o el propio técnico marca la ausencia. Trazora busca a quien tenga la especialidad, esa hora libre, menos carga del día y mejor resolución sin revisita.</p>
+        <a class="link" href="/login">Probarlo en la demo</a>
+      </div>
+      <ol class="registro span-6 start-7" aria-label="Lo que pasa cuando Carlos marca su ausencia">
+        <li><svg class="paso__ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM3 13.5c.6-2.3 2.6-3.5 5-3.5s4.4 1.2 5 3.5"/><path d="m11 3 3 3m0-3-3 3"/></svg><span><b>Carlos marca su ausencia</b>Desde su celular, a las 08:05 del martes 10.</span></li>
+        <li><svg class="paso__ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span><b>Agenda revisa sus 2 visitas</b>Busca técnicos con jornada, especialidad y la hora libre.</span></li>
+        <li><svg class="paso__ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8h9m-3-3.5L12 8l-3.5 3.5"/></svg><span><b>La de las 09:00 pasa a Ana</b>1 visita ese día, 95 % de resolución sin revisita.</span></li>
+        <li><svg class="paso__ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 14 13H2Z"/><path d="M8 6.5V9m0 2v.5"/></svg><span><b>La de las 11:00 queda en alerta</b>Nadie está libre a esa hora: el coordinador la reprograma.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="preguntas" aria-labelledby="preguntas-h">
+    <div class="wrap grid">
+      <div class="span-5 stack-5">
+        <h2 id="preguntas-h">Preguntas</h2>
+        <p class="muted">Lo que suelen preguntar las empresas antes de probarla.</p>
+        <a class="link" href="/login">Entrar con una cuenta de demo</a>
+      </div>
+      <div class="faq span-6 start-7">
+        <div class="faq__item"><h3>¿Cómo elige al técnico de reemplazo?</h3><p>Entre quienes tienen la especialidad y esa hora libre, el de menos visitas ese día; si empatan, el que más resuelve a la primera.</p></div>
+        <div class="faq__item"><h3>¿Y si nadie está libre?</h3><p>La visita queda como alerta en el panel del coordinador, con una ventana para moverla a otro día u hora.</p></div>
+        <div class="faq__item"><h3>¿Puede una empresa ver los datos de otra?</h3><p>No. Cada empresa entra con su código y solo ve sus clientes, órdenes, técnicos y fotos.</p></div>
+        <div class="faq__item"><h3>¿Dónde quedan las fotos de los partes?</h3><p>En un almacenamiento privado. Se ven con un enlace que caduca a los cinco minutos.</p></div>
+        <div class="faq__item"><h3>¿El técnico necesita instalar algo?</h3><p>No. Usa Trazora desde el navegador de su celular.</p></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer closing" id="contact" aria-labelledby="close-h">
+  <div class="wrap">
+    <div class="closing__cta close--word">
+      <div class="section-head section-head--row">
+        <h2 id="close-h">Prueba Trazora con tres empresas de demo</h2>
+        <a class="btn btn--primary" href="/login">Entrar a la demo<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+      </div>
+      <p class="close__word" aria-hidden="true">Trazora</p>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-5"><p class="footer__lede">Órdenes, agenda y partes de servicio técnico.</p></div>
+        <div class="span-2 start-7 footer__col"><h3>Producto</h3><ul><li><a href="#ventana">Ventana</a></li><li><a href="#funciones">Funciones</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Reasignación</h3><ul><li><a href="#reasignacion">Cómo funciona</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>Preguntas</h3><ul><li><a href="#preguntas">Frecuentes</a></li><li><a href="/login">Demo</a></li></ul></div>
+      </div>
+      <div class="footer__legal"><span>&copy; 2026 Trazora · Proyecto académico, Cloud Computing, UTEC</span><span class="socials"></span><span>Mapas: &copy; colaboradores de OpenStreetMap</span></div>
+    </div>
+  </div>
+</footer>
+<script type="module" src="assets/system.js"></script>
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/layout/layout.js"></script>
+<script type="module">
+  // El tablero del encabezado: Carlos se ausenta, su visita de las 10:00 pasa a Ana, aparece el aviso; vuelve a empezar.
+  const t = document.querySelector('[data-tablero]');
+  const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (t) {
+    const carlos = t.querySelector('[data-col="carlos"]');
+    const estado = carlos.querySelector('[data-estado]');
+    const bloque = t.querySelector('[data-mueve]');
+    const segundo = t.querySelector('[data-mueve-2]');
+    const aviso = t.querySelector('[data-aviso]');
+    const paso = () => {
+      const ancho = carlos.getBoundingClientRect().width;
+      return { a: () => { carlos.classList.add('es-ausente'); estado.textContent = 'Ausente'; },
+               b: () => { bloque.style.transform = `translateX(${ancho}px)`; },
+               c: () => { aviso.classList.add('se-ve'); segundo.classList.replace('bloque--prog', 'bloque--alerta'); },
+               d: () => { carlos.classList.remove('es-ausente'); estado.textContent = '3 visitas'; bloque.style.transform = ''; aviso.classList.remove('se-ve'); segundo.classList.replace('bloque--alerta', 'bloque--prog'); } };
+    };
+    if (quieto) { const p = paso(); p.a(); p.b(); p.c(); }
+    else {
+      const ciclo = () => { const p = paso(); setTimeout(p.a, 600); setTimeout(p.b, 1400); setTimeout(p.c, 2300); setTimeout(p.d, 6200); };
+      ciclo(); setInterval(ciclo, 7000);
+    }
+  }
+</script>
+</body>
+</html>

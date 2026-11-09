@@ -1,0 +1,26 @@
+# Secretos y configuración local
+config.env
+.demo-credentials
+.local-env/
+credentials
+.env
+.env.*
+!.env.example
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Node y builds
+node_modules/
+frontend/dist/
+frontend/dist.zip
+.serverless/
+# Copia de la librería común generada al desplegar
+backend/*/trazora_common/
+!backend/common/trazora_common/
+tests/e2e/node_modules/
+tests/e2e/resultados/
+
+# Herramientas locales de la skill de diseño
+frontend/.taste-skill/

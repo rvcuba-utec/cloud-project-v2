@@ -1,10 +1,10 @@
 # Trazora FSM — Arquitectura técnica en AWS
 
-Vista técnica de **todos los recursos AWS** que se desplegarán, derivada de la [propuesta final](proposal.md). Los diagramas están en Mermaid.
+Vista técnica de **todos los recursos AWS** desplegados, derivada de la [propuesta final](proposal.md) y comprobada contra el código de `backend/`. Los diagramas están en Mermaid.
 
 - Flechas continuas: invocación o flujo de datos.
-- Flechas punteadas: llamadas internas entre servicios, streams, redrive o permisos.
-- Los nombres de tablas, colas y funciones son orientativos; el sufijo `-{stage}` se define al desplegar.
+- Flechas punteadas: llamadas internas entre servicios, redrive o barrido.
+- Las tablas y colas llevan el stage como prefijo, por ejemplo `dev-t_ordenes` y `dev-q-agenda`.
 
 ## 1. Diagrama general
 
@@ -19,7 +19,7 @@ flowchart LR
         CF["CloudFormation<br/>1 stack por microservicio<br/>+ stack de infraestructura compartida"]
 
         subgraph FRONT["Frontend"]
-            AMP["Amplify Hosting<br/>React<br/>build + deploy desde Git"]
+            AMP["Amplify Hosting<br/>React<br/>.zip publicado por CLI"]
         end
 
         subgraph MS0["MS0 Usuarios y acceso"]
@@ -42,20 +42,21 @@ flowchart LR
             API3["API Gateway<br/>/ordenes<br/>cerrar, cancelar"]
             L3["Lambdas API<br/>crear, listar, detalle, prioridad,<br/>cerrar, cancelar"]
             C3["Lambda consumidor<br/>eventos de Agenda y Partes"]
-            P3["Lambda publicadora<br/>OrdenCreada, OrdenCerrada,<br/>OrdenCancelada"]
+            P3["Lambda barrerOutbox<br/>OrdenCreada, OrdenCerrada,<br/>OrdenCancelada"]
         end
 
         subgraph MS4["MS4 Agenda"]
             API4["API Gateway<br/>/disponibilidad, /visitas<br/>reprogramar, iniciar, cancelar"]
             L4["Lambdas API<br/>disponibilidad y sugerencia,<br/>programar, reprogramar, cancelar,<br/>iniciar, bloqueo de orden"]
             C4["Lambda consumidor<br/>ParteFinalizado"]
-            P4["Lambda publicadora<br/>VisitaProgramada, Reprogramada,<br/>Cancelada, Iniciada, Completada"]
+            P4["Lambda barrerOutbox<br/>VisitaProgramada, Reprogramada,<br/>Cancelada, Iniciada, Completada"]
         end
 
         subgraph MS5["MS5 Partes"]
             API5["API Gateway<br/>/visitas/id/partes<br/>/partes, /evidencias"]
-            L5["Lambdas API<br/>borrador y edición, URL prefirmada,<br/>confirmar evidencia, finalizar"]
-            P5["Lambda publicadora<br/>ParteFinalizado"]
+            L5["Lambdas API<br/>borrador y edición, POST firmado,<br/>confirmar evidencia, finalizar"]
+            P5["Lambda barrerOutbox<br/>ParteFinalizado"]
+            N5["Lambda onEvidenciaSubida<br/>notificación de S3"]
         end
 
         subgraph MS6["MS6 Analítica"]
@@ -66,12 +67,12 @@ flowchart LR
 
         subgraph DATA["DynamoDB: una persistencia exclusiva por servicio"]
             T0[("t_usuarios")]
-            T0S[("t_sesiones<br/>TTL de expiración")]
+            T0S[("t_sesiones<br/>expiración revisada al validar")]
             T1[("t_clientes")]
             T2[("t_tecnicos")]
-            T3[("t_ordenes<br/>Streams")]
-            T4[("t_agenda<br/>Streams")]
-            T5[("t_partes<br/>Streams")]
+            T3[("t_ordenes")]
+            T4[("t_agenda")]
+            T5[("t_partes")]
             T6[("t_analitica")]
         end
 
@@ -91,13 +92,14 @@ flowchart LR
 
         subgraph OPS["Observabilidad y permisos"]
             CW["CloudWatch<br/>Logs y métricas<br/>de todas las Lambdas"]
-            IAM["IAM<br/>rol de ejecución por Lambda<br/>mínimo privilegio"]
+            IAM["IAM<br/>LabRole en todas las Lambdas"]
+            EB["EventBridge<br/>rate 5 minutes"]
         end
     end
 
     %% Despliegue
     DEV -->|"serverless deploy"| CF
-    DEV -->|"build en cada push"| AMP
+    DEV -->|"deploy.sh frontend: .zip por CLI"| AMP
 
     %% Acceso
     USR --> AMP
@@ -108,7 +110,7 @@ flowchart LR
     AMP -->|"HTTPS + token"| API4
     AMP -->|"HTTPS + token"| API5
     AMP -->|"HTTPS + token"| API6
-    AMP -->|"PUT y GET con URL prefirmada"| S3
+    AMP -->|"POST firmado y GET prefirmado"| S3
 
     %% Autorizador
     API1 -.->|"authorizer"| AUTH
@@ -133,20 +135,29 @@ flowchart LR
 
     %% Llamadas internas síncronas
     L3 -.->|"valida cliente y ubicación"| API1
-    L3 -.->|"bloquea programaciones al cerrar"| API4
+    L3 -.->|"lambda.invoke: bloquea programaciones al cerrar"| L4
     L4 -.->|"valida jornada y especialidad"| API2
     L4 -.->|"valida orden"| API3
     L4 -.->|"métricas para sugerir técnico"| API6
     L5 -.->|"valida visita y asignación"| API4
-    L5 -->|"genera URL prefirmada y verifica objeto"| S3
+    L5 -->|"firma subida y lectura"| S3
+    S3 -->|"notificación ObjectCreated"| N5
+    N5 --> T5
 
-    %% Outbox, streams y publicación
-    T3 -.->|"Stream OUTBOX"| P3
-    T4 -.->|"Stream OUTBOX"| P4
-    T5 -.->|"Stream OUTBOX"| P5
-    P3 -->|"publica"| SNS
-    P4 -->|"publica"| SNS
-    P5 -->|"publica"| SNS
+    %% Outbox: publica la Lambda que hizo el cambio; el barrido recupera lo pendiente
+    L3 -->|"publica y borra OUTBOX"| SNS
+    L4 -->|"publica y borra OUTBOX"| SNS
+    L5 -->|"publica y borra OUTBOX"| SNS
+    C4 -->|"VisitaCompletada"| SNS
+    EB -.-> P3
+    EB -.-> P4
+    EB -.-> P5
+    T3 -.->|"OUTBOX pendiente"| P3
+    T4 -.->|"OUTBOX pendiente"| P4
+    T5 -.->|"OUTBOX pendiente"| P5
+    P3 -->|"reenvía"| SNS
+    P4 -->|"reenvía"| SNS
+    P5 -->|"reenvía"| SNS
 
     %% Fan-out
     SNS -->|"filtro por tipo de evento"| QAG
@@ -169,11 +180,7 @@ flowchart LR
     L4 -.-> CW
     L5 -.-> CW
     L6 -.-> CW
-    IAM -.->|"roles"| MS0
-    IAM -.->|"roles"| MS3
-    IAM -.->|"roles"| MS4
-    IAM -.->|"roles"| MS5
-    IAM -.->|"roles"| MS6
+    IAM -.->|"rol de ejecución"| DATA
 
     %% Carga masiva
     VM ==>|"batch_writer directo,<br/>sin API Gateway ni Lambda"| DATA
@@ -191,37 +198,39 @@ flowchart LR
 
     SNS -->|"VisitaProgramada<br/>VisitaReprogramada<br/>VisitaIniciada<br/>VisitaCancelada<br/>VisitaCompletada<br/>ParteFinalizado"| QOR["q-ordenes"]
 
-    SNS -->|"VisitaProgramada<br/>VisitaReprogramada<br/>VisitaCancelada<br/>VisitaCompletada<br/>ParteFinalizado<br/>OrdenCreada<br/>OrdenCerrada<br/>OrdenCancelada"| QAN["q-analitica"]
+    SNS -->|"VisitaProgramada<br/>VisitaReprogramada<br/>VisitaCancelada<br/>VisitaCompletada<br/>OrdenCreada<br/>OrdenCerrada<br/>OrdenCancelada"| QAN["q-analitica"]
 ```
 
 ## 3. Inventario de recursos
 
 | Recurso AWS | Cantidad | Detalle |
 |---|---:|---|
-| Amplify Hosting | 1 app | React, rama `main`, variables con las URLs de las 7 APIs. |
-| API Gateway | 7 | Una por microservicio. MS1–MS6 usan el Lambda Authorizer de MS0. En MS0, `login` es público y sus demás rutas validan el token dentro del propio servicio. |
-| Lambda Authorizer | 1 | Pertenece al stack de MS0 y las APIs de MS1–MS6 lo referencian. |
-| Lambdas de API | por servicio | Una función por operación o grupo de operaciones. |
-| Lambdas publicadoras | 3 | MS3, MS4 y MS5, disparadas por DynamoDB Streams. |
-| Lambdas consumidoras | 3 | MS3, MS4 y MS6, disparadas por SQS. |
-| DynamoDB | 8 tablas | `t_usuarios`, `t_sesiones`, `t_clientes`, `t_tecnicos`, `t_ordenes`, `t_agenda`, `t_partes`, `t_analitica`. Streams en órdenes, agenda y partes. |
+| Amplify Hosting | 1 app | React, rama `main`, publicada con un `.zip` por CLI. Las URLs de las 7 APIs se fijan al compilar. |
+| API Gateway | 7 REST | Una por microservicio, con integración proxy. Todas usan el Lambda Authorizer de MS0, salvo `POST /auth/login`. |
+| Lambda Authorizer | 1 | `validarToken`, del stack de MS0. Tipo TOKEN con 60 s de caché. |
+| Lambdas de API | Una por operación | Definidas en cada `backend/<servicio>/serverless.yml`. |
+| Lambda interna | 1 | `bloquearOrden`, sin ruta: la invoca MS3 con `lambda.invoke`. |
+| Lambdas programadas | 3 | `barrerOutbox` en MS3, MS4 y MS5, con EventBridge cada 5 minutos. |
+| Lambdas consumidoras | 3 | MS3, MS4 y MS6, disparadas por SQS con `batchSize: 1` y `maximumConcurrency: 2`. |
+| Lambda de notificación | 1 | `onEvidenciaSubida`, disparada por el bucket de S3. |
+| DynamoDB | 8 tablas | `t_usuarios`, `t_sesiones`, `t_clientes`, `t_tecnicos`, `t_ordenes`, `t_agenda`, `t_partes`, `t_analitica`. Bajo demanda y sin Streams. |
 | SNS | 1 tema | `fsm-eventos`, con 3 suscripciones filtradas. |
-| SQS | 3 colas + 3 DLQ | `q-agenda`, `q-ordenes`, `q-analitica` y su cola de errores cada una. |
-| S3 | 1 bucket | Privado. Acceso solo mediante URLs prefirmadas emitidas por MS5. |
-| CloudWatch | — | Grupos de logs por Lambda y alarmas sobre las DLQ. |
-| CloudFormation | 1 por servicio + compartido | Generado por Serverless Framework. |
-| EC2 | 1 MV | Solo para la carga inicial con boto3; no forma parte del runtime. |
+| SQS | 3 colas + 3 DLQ | `q-agenda`, `q-ordenes`, `q-analitica` y su cola de errores cada una. Visibilidad de 120 s y 5 intentos. |
+| S3 | 1 bucket | Privado. Acceso solo con formularios y URLs firmados por MS5. |
+| EventBridge | 3 reglas | Las de los barridos. |
+| CloudWatch | — | Grupos de logs por Lambda. |
+| CloudFormation | 7 + 1 | Un stack por microservicio y uno compartido, generados por Serverless Framework. |
+| IAM | `LabRole` | Único rol disponible en el laboratorio. |
+| EC2 | 1 MV | Solo para la carga inicial con boto3; no forma parte de la ejecución. |
 
 ## 4. Notas técnicas
 
-- **Propiedad de datos:** cada Lambda accede únicamente a la tabla de su servicio. Las consultas entre servicios pasan por la API del otro servicio, nunca por su tabla.
+- **Propiedad de datos:** cada Lambda accede únicamente a la tabla de su servicio. Las consultas entre servicios pasan por la API del otro servicio, nunca por su tabla. Con `LabRole`, IAM no lo impone: lo comprueba `backend/common/tests/test_arquitectura.py`.
 - **Outbox e inbox:** los registros `OUTBOX` viven en la tabla del productor y los `INBOX` en la del consumidor. Se escriben en la misma transacción que el cambio de negocio.
-- **Analítica es opcional en runtime:** si `API6` no responde, MS4 sigue programando visitas con el orden por defecto.
-- **Carga masiva:** la MV escribe directo a DynamoDB con credenciales temporales de AWS Academy, como pidió el docente. No pasa por API Gateway ni Lambda.
-- **IAM en AWS Academy:** en el laboratorio suele estar disponible solo el rol preexistente `LabRole`. Hay que verificar si el despliegue puede crear un rol por Lambda; si no, todas usarán `LabRole` y la separación de permisos quedaría documentada pero no aplicada por IAM.
-- **Mecanismo de token pendiente:** el diagrama asume tokens opacos con sesión en `t_sesiones`. Si se elige un token firmado y verificable (decisión abierta en la sección 9.1 de la propuesta), `t_sesiones` puede omitirse y quedaría 1 tabla menos en MS0.
-- **Caché del autorizador:** conviene activar la caché de resultados del Lambda Authorizer en API Gateway (TTL corto). Sin ella, cada petición consulta DynamoDB dos veces. La caché retrasa unos segundos la revocación de una sesión o usuario inactivo.
-- **Filtro SNS:** las publicadoras envían `event_type` como atributo del mensaje; la política de filtrado de cada suscripción se basa en ese atributo.
-- **CORS en S3:** el bucket necesita una regla CORS que permita `PUT` y `GET` desde el dominio de Amplify, porque el navegador sube y descarga con URLs prefirmadas.
-- **Recuperación de eventos:** el comando de `scripts/recovery/` vuelve a publicar en SNS los registros `OUTBOX` pendientes. Se ejecuta a demanda y no es un recurso permanente.
-- **Región:** por definir al fijar el entorno. Todos los recursos deben desplegarse en la misma región.
+- **Por qué sin Streams:** publicar desde la misma Lambda y barrer lo pendiente da la misma garantía con menos Lambdas activas, lo que ayuda a respetar el límite de concurrencia de Academy.
+- **Analítica es opcional en ejecución:** si `API6` no responde, MS4 sigue programando visitas en orden alfabético y sin justificación. Se comprobó en AWS apuntando Agenda a una URL inválida.
+- **Carga masiva:** escribe directo a DynamoDB con boto3, en un solo proceso. No pasa por API Gateway ni Lambda ni publica eventos: no consume concurrencia.
+- **Token:** opaco (UUID4), con su hash SHA-256 en `t_sesiones`. La caché del autorizador puede retrasar hasta 60 s la revocación de una sesión o de un usuario inactivo.
+- **Filtro SNS:** los productores envían `event_type` como atributo del mensaje; la política de filtrado de cada suscripción se basa en ese atributo.
+- **Evidencias:** el bucket permite `POST` y `GET` desde el dominio de Amplify. `content-length-range` hace que S3 rechace archivos de más de 5 MB.
+- **Región:** `us-east-1`.

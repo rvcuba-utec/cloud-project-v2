@@ -1,0 +1,80 @@
+org: ${env:SLS_ORG}
+service: api-tecnicos
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_tecnicos
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/tecnicos.crear
+    events:
+      - http: { path: tecnicos, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/tecnicos.listar
+    events:
+      - http: { path: tecnicos, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  disponibles:
+    handler: handlers/jornadas.disponibles
+    events:
+      - http: { path: tecnicos/disponibles, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/tecnicos.detalle
+    events:
+      - http: { path: 'tecnicos/{tecnico_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  actualizar:
+    handler: handlers/tecnicos.actualizar
+    events:
+      - http: { path: 'tecnicos/{tecnico_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  definirJornada:
+    handler: handlers/jornadas.definir_jornada
+    events:
+      - http: { path: 'tecnicos/{tecnico_id}/jornadas/{fecha}', method: put, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  registrarAusencia:
+    handler: handlers/jornadas.registrar_ausencia
+    events:
+      - http: { path: 'tecnicos/{tecnico_id}/ausencias/{fecha}', method: put, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  consultarJornadas:
+    handler: handlers/jornadas.consultar
+    events:
+      - http: { path: 'tecnicos/{tecnico_id}/jornadas', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  disponiblesInterno:   # Sin ruta: solo la invoca Agenda con lambda.invoke.
+    handler: handlers/jornadas.disponibles_interno
+  barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
+    handler: trazora_common.eventos.manejador_barrido
+    timeout: 60
+    environment:
+      TENANTS: ${file(../serverless.common.yml):tenants}
+    events:
+      - schedule: rate(5 minutes)
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      TablaTecnicos:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }

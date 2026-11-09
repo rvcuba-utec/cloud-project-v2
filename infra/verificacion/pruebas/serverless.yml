@@ -1,0 +1,131 @@
+# Stack desechable: comprueba en la cuenta real las piezas que no se vieron en clase.
+org: ${env:SLS_ORG}
+service: trazora-verif
+custom:
+  cors:
+    origin: '*'
+    headers: [Content-Type, Authorization, Idempotency-Key]
+  authorizer:
+    arn: arn:aws:lambda:${aws:region}:${aws:accountId}:function:trazora-verif-auth-${sls:stage}-validar
+    type: token
+    identitySource: method.request.header.Authorization
+    resultTtlInSeconds: 60
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'verif'}
+  timeout: 10
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_verificacion
+    BUCKET: trazora-verif-${aws:accountId}
+    OBJETIVO: trazora-verif-${sls:stage}-objetivo
+  s3:
+    verificacion:
+      name: trazora-verif-${aws:accountId}
+      publicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      corsConfiguration:
+        CorsRules:
+          - AllowedMethods: [POST, GET]
+            AllowedOrigins: ['*']
+            AllowedHeaders: ['*']
+functions:
+  protegido:
+    handler: handler.protegido
+    events:
+      - http: { path: protegido, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+      - http: { path: protegido, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  firmar:
+    handler: handler.firmar
+    events:
+      - http: { path: firmar, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  objetivo:
+    handler: handler.objetivo
+  consumidor:
+    handler: handler.consumidor
+    events:
+      - sqs:
+          arn: { "Fn::GetAtt": [Cola, Arn] }
+          batchSize: 1
+          maximumConcurrency: 2
+  programado:
+    handler: handler.programado
+    events:
+      - schedule: rate(1 minute)
+  onS3:
+    handler: handler.on_s3
+    events:
+      - s3:
+          bucket: verificacion
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: tenants/
+resources:
+  Resources:
+    Tabla:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.TABLE_NAME}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - { AttributeName: PK, AttributeType: S }
+          - { AttributeName: SK, AttributeType: S }
+        KeySchema:
+          - { AttributeName: PK, KeyType: HASH }
+          - { AttributeName: SK, KeyType: RANGE }
+    Tema:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${sls:stage}-verif-eventos
+    ColaFallidos:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${sls:stage}-verif-q-dlq
+    Cola:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${sls:stage}-verif-q
+        VisibilityTimeout: 20
+        RedrivePolicy:
+          deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidos, Arn] }
+          maxReceiveCount: 2
+    PoliticaCola:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues: [{ Ref: Cola }]
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal: { Service: sns.amazonaws.com }
+              Action: sqs:SendMessage
+              Resource: { "Fn::GetAtt": [Cola, Arn] }
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: { Ref: Tema }
+    Suscripcion:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: { Ref: Tema }
+        Protocol: sqs
+        Endpoint: { "Fn::GetAtt": [Cola, Arn] }
+        FilterPolicy:
+          event_type: [Aceptado, Fallido]
+    Default4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        RestApiId: { Ref: ApiGatewayRestApi }
+        ResponseType: DEFAULT_4XX
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+  Outputs:
+    TopicArn:
+      Value: { Ref: Tema }
+    ColaFallidosUrl:
+      Value: { Ref: ColaFallidos }

@@ -1,0 +1,17 @@
+org: ${env:SLS_ORG}
+service: trazora-shared
+
+provider:
+  name: aws
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    TemaEventos:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${sls:stage}-fsm-eventos
+  Outputs:
+    TopicArn:
+      Value: { Ref: TemaEventos }

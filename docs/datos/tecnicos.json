@@ -1,0 +1,35 @@
+{
+  "TECNICO": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "TECNICO#TEC-CLIMALIMA-0000",
+    "entity_type": "TECNICO",
+    "tenant_id": "CLIMALIMA",
+    "tecnico_id": "TEC-CLIMALIMA-0000",
+    "nombre": "Ana Huamán",
+    "especialidades": [
+      "INSTALACION",
+      "MANTENIMIENTO"
+    ],
+    "activo": true,
+    "creado_en": "2026-10-11T13:00:00Z"
+  },
+  "JORNADA": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "JORNADA#TEC-CLIMALIMA-0000#2026-10-11",
+    "entity_type": "JORNADA",
+    "tenant_id": "CLIMALIMA",
+    "tecnico_id": "TEC-CLIMALIMA-0000",
+    "fecha": "2026-10-11",
+    "zona_horaria": "America/Lima",
+    "intervalos": [
+      {
+        "inicio": "08:00",
+        "fin": "12:00"
+      },
+      {
+        "inicio": "13:00",
+        "fin": "17:00"
+      }
+    ]
+  }
+}

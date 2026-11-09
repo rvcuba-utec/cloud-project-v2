@@ -1,0 +1,43 @@
+{
+  "ORDEN": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "ORDEN#OT-1792936800000-CLI00000",
+    "entity_type": "ORDEN",
+    "tenant_id": "CLIMALIMA",
+    "orden_id": "OT-1792936800000-CLI00000",
+    "cliente_id": "CLI-CLIMALIMA-00085",
+    "ubicacion_id": "LOC-CLIMALIMA-00085",
+    "cliente_nombre": "Inversiones Rojas 00085",
+    "direccion": "Av. La Marina 1416",
+    "distrito": "San Isidro",
+    "tipo_servicio": "REPARACION",
+    "descripcion": "No enfría",
+    "prioridad": "MEDIA",
+    "estado": "CERRADA",
+    "version": 7,
+    "creada_en": "2026-10-25T14:00:00Z",
+    "GSI1PK": "TENANT#CLIMALIMA#ESTADO#CERRADA",
+    "GSI1SK": "2026-10-25T14:00:00Z#OT-1792936800000-CLI00000",
+    "GSI2PK": "TENANT#CLIMALIMA#CLIENTE#CLI-CLIMALIMA-00085",
+    "GSI2SK": "2026-10-25T14:00:00Z#OT-1792936800000-CLI00000",
+    "resumen_visitas": {
+      "VIS-CLIMALIMA-00000-1": {
+        "estado": "FINALIZADA",
+        "version": 3,
+        "numero": 1,
+        "resultado": "RESUELTO"
+      }
+    },
+    "terminada_en": "2026-10-29T13:22:00Z"
+  },
+  "HISTORIAL": {
+    "PK": "TENANT#CLIMALIMA",
+    "SK": "HIST#OT-1792936800000-CLI00000#2026-10-25T14:00:00Z#a",
+    "entity_type": "HISTORIAL",
+    "orden_id": "OT-1792936800000-CLI00000",
+    "tipo": "ORDEN_CREADA",
+    "detalle": "Orden registrada",
+    "usuario_id": "carga",
+    "ocurrido_en": "2026-10-25T14:00:00Z"
+  }
+}

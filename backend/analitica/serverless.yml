@@ -1,0 +1,97 @@
+org: ${env:SLS_ORG}
+service: api-analitica
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_analitica
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  dashboard:
+    handler: handlers/consultas.dashboard
+    events:
+      - http: { path: analitica/dashboard, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  tecnicos:
+    handler: handlers/consultas.tecnicos
+    events:
+      - http: { path: analitica/tecnicos, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  tecnico:
+    handler: handlers/consultas.tecnico
+    events:
+      - http: { path: 'analitica/tecnicos/{tecnico_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  tecnicosInterno:   # Sin ruta: solo la invoca Agenda con lambda.invoke.
+    handler: handlers/consultas.tecnicos_interno
+  consumidor:
+    handler: handlers/consumidor.lambda_handler
+    timeout: 20
+    events:
+      - sqs:
+          arn: { "Fn::GetAtt": [ColaAnalitica, Arn] }
+          batchSize: 1
+          maximumConcurrency: 2   # El mínimo admitido: menos conflictos sobre los contadores del tenant.
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      ColaFallidosAnalitica:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-analitica-dlq
+          MessageRetentionPeriod: 1209600
+      ColaAnalitica:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-analitica
+          VisibilityTimeout: 120   # 6 veces el timeout del consumidor (H22).
+          RedrivePolicy:
+            deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidosAnalitica, Arn] }
+            maxReceiveCount: 5
+      PoliticaColaAnalitica:
+        Type: AWS::SQS::QueuePolicy
+        Properties:
+          Queues: [{ Ref: ColaAnalitica }]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Principal: { Service: sns.amazonaws.com }
+                Action: sqs:SendMessage
+                Resource: { "Fn::GetAtt": [ColaAnalitica, Arn] }
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: ${self:provider.environment.TOPIC_ARN}
+      SuscripcionAnalitica:
+        Type: AWS::SNS::Subscription
+        Properties:
+          TopicArn: ${self:provider.environment.TOPIC_ARN}
+          Protocol: sqs
+          Endpoint: { "Fn::GetAtt": [ColaAnalitica, Arn] }
+          FilterPolicy:
+            # Sin ParteFinalizado: VisitaCompletada ya trae el resultado y contarlo dos veces duplicaría las tasas (H5).
+            event_type: [VisitaProgramada, VisitaReprogramada, VisitaCancelada, VisitaCompletada, OrdenCreada, OrdenCerrada, OrdenCancelada]
+      TablaAnalitica:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }

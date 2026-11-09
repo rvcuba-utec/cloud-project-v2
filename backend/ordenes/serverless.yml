@@ -1,0 +1,139 @@
+org: ${env:SLS_ORG}
+service: api-ordenes
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_ordenes
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+    CLIENTES_URL: ${cf:api-clientes-${sls:stage}.ServiceEndpoint}
+    AGENDA_BLOQUEO_FN: api-agenda-${sls:stage}-bloquearOrden
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/ordenes.crear
+    events:
+      - http: { path: ordenes, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/ordenes.listar
+    events:
+      - http: { path: ordenes, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/ordenes.detalle
+    events:
+      - http: { path: 'ordenes/{orden_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  actualizar:
+    handler: handlers/ordenes.actualizar
+    events:
+      - http: { path: 'ordenes/{orden_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  mapa:
+    handler: handlers/ordenes.mapa
+    events:
+      - http: { path: ordenes/mapa, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  historial:
+    handler: handlers/ordenes.historial
+    events:
+      - http: { path: 'ordenes/{orden_id}/historial', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+
+  cerrar:
+    handler: handlers/ordenes.cerrar
+    events:
+      - http: { path: 'ordenes/{orden_id}/cerrar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  cancelar:
+    handler: handlers/ordenes.cancelar
+    events:
+      - http: { path: 'ordenes/{orden_id}/cancelar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
+    handler: trazora_common.eventos.manejador_barrido
+    timeout: 60
+    environment:
+      TENANTS: ${file(../serverless.common.yml):tenants}
+    events:
+      - schedule: rate(5 minutes)
+  consumidor:
+    handler: handlers/consumidor.lambda_handler
+    timeout: 20
+    events:
+      - sqs:
+          arn: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+          batchSize: 1
+          maximumConcurrency: 2
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      ColaFallidosOrdenes:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-ordenes-dlq
+          MessageRetentionPeriod: 1209600
+      ColaOrdenes:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-ordenes
+          VisibilityTimeout: 120   # 6 veces el timeout del consumidor (H22).
+          RedrivePolicy:
+            deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidosOrdenes, Arn] }
+            maxReceiveCount: 5
+      PoliticaColaOrdenes:
+        Type: AWS::SQS::QueuePolicy
+        Properties:
+          Queues: [{ Ref: ColaOrdenes }]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Principal: { Service: sns.amazonaws.com }
+                Action: sqs:SendMessage
+                Resource: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: ${self:provider.environment.TOPIC_ARN}
+      SuscripcionOrdenes:
+        Type: AWS::SNS::Subscription
+        Properties:
+          TopicArn: ${self:provider.environment.TOPIC_ARN}
+          Protocol: sqs
+          Endpoint: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+          FilterPolicy:
+            event_type: [VisitaProgramada, VisitaReprogramada, VisitaIniciada, VisitaCancelada, VisitaCompletada, ParteFinalizado]
+      TablaOrdenes:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+            - { AttributeName: GSI2PK, AttributeType: S }
+            - { AttributeName: GSI2SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Órdenes por estado
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI2   # Órdenes por cliente
+              KeySchema:
+                - { AttributeName: GSI2PK, KeyType: HASH }
+                - { AttributeName: GSI2SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }

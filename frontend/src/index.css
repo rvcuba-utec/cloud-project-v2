@@ -1,0 +1,70 @@
+@layer theme, base, kit, components, utilities;
+@import "tailwindcss";
+/* El kit va en su propia capa: por debajo de las utilidades, para que una clase de Tailwind siempre gane. */
+@import "./kit/system.css" layer(kit);
+@import "./kit/cards.css" layer(kit);
+@import "./kit/motion.css" layer(kit);
+/* La app usa la rejilla de Tailwind, no la de 12 columnas del kit, que estira a cada hijo a lo ancho. */
+@layer kit {
+  .grid { grid-template-columns: minmax(0, 1fr); column-gap: normal; row-gap: normal; }
+  .grid > * { grid-column: auto; }
+  /* Los botones pequeños (navegar fechas, horarios, salir) no llevan la flecha del estilo "arrow". */
+  .btn.btn--sm::after { content: none; display: none; }
+}
+
+/* Tokens del kit de diseño (assets/system.css): paleta clay-pine y tipografía Instrument Sans,
+   sorteadas por la skill para software. Tailwind solo los expone como utilidades. */
+:root {
+  --p-bg: #efe9e0; --p-surface: #e2d9cb; --p-ink: #22261f; --p-muted: #5a5c53;
+  --p-accent: #2e5b44; --p-accent-ink: #ffffff; --p-action: #2e5b44; --p-action-ink: #ffffff;
+  --p-inv-bg: #22261f; --p-inv-surface: #2e322a; --p-inv-ink: #efe9e0; --p-inv-muted: #a19e96;
+  --p-inv-accent: #efe9e0; --p-inv-accent-ink: #22261f; --p-inv-action: #efe9e0; --p-inv-action-ink: #22261f;
+  --font-display: "Instrument Sans", system-ui, sans-serif;
+  --font-text: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500; --display-tracking: -0.028em; --display-tracking-xl: -0.036em; --display-stretch: 96%;
+}
+
+@theme inline {
+  --color-ground: var(--p-bg);
+  --color-surface: var(--p-surface);
+  --color-card: #f8f4ee;
+  --color-ink: var(--p-ink);
+  --color-muted: var(--p-muted);
+  --color-line: color-mix(in oklab, var(--p-ink) 14%, transparent);
+  --color-line-strong: color-mix(in oklab, var(--p-ink) 30%, transparent);
+  --color-accent: var(--p-accent);
+  --color-accent-soft: color-mix(in oklab, var(--p-accent) 12%, var(--p-bg));
+  --color-inv: var(--p-inv-bg);
+  --color-inv-ink: var(--p-inv-ink);
+  --color-inv-muted: var(--p-inv-muted);
+  /* Estados: reservados para estado, siempre con texto o ícono al lado, nunca solo color. */
+  --color-critical: #a8321f;
+  --color-critical-soft: #f3dcd4;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #f1e3c2;
+  --color-good: #2f7a4a;
+  --color-good-soft: #d9e9d8;
+  --color-info: #2456b0;
+  --color-info-soft: #dbe3f1;
+  --font-display: "Instrument Sans", system-ui, sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+}
+
+body { background: var(--p-bg); color: var(--p-ink); font-family: var(--font-text); }
+.font-display { font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: var(--display-tracking); font-stretch: var(--display-stretch); }
+.tabular { font-variant-numeric: tabular-nums; }
+@keyframes entra { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.entra { animation: entra 360ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes pulso { 0%,100% { transform: scale(1); opacity: .55; } 50% { transform: scale(1.9); opacity: 0; } }
+.pulso { animation: pulso 2.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .entra, .pulso { animation: none; } }
+
+.btn--peligro { background: var(--color-critical); color: #fff; }
+.btn--peligro:hover { background: color-mix(in oklab, var(--color-critical) 86%, var(--p-ink)); }
+
+.mayuscula-inicial { display: inline-block; }
+.mayuscula-inicial::first-letter { text-transform: uppercase; }
+/* Teselas de OpenStreetMap en tono cálido, para que el mapa pertenezca a la paleta. */
+.teselas { filter: sepia(.18) saturate(.8) contrast(.96); }

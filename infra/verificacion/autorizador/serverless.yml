@@ -1,0 +1,14 @@
+# Stack desechable: comprueba un autorizador declarado en otro stack.
+org: ${env:SLS_ORG}
+service: trazora-verif-auth
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'verif'}
+  timeout: 10
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+functions:
+  validar:
+    handler: handler.lambda_handler

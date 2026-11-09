@@ -1,0 +1,6 @@
+boto3
+awscli
+pytest
+moto[dynamodb,s3,sns,sqs]
+
+tzdata

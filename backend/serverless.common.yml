@@ -1,0 +1,33 @@
+# Fragmentos compartidos por los serverless.yml de los microservicios.
+cors:
+  origin: '*'
+  headers: [Content-Type, Authorization, Idempotency-Key]
+
+authorizer:
+  arn: arn:aws:lambda:${aws:region}:${aws:accountId}:function:api-usuarios-${sls:stage}-validarToken
+  type: token
+  identitySource: method.request.header.Authorization
+  resultTtlInSeconds: 60
+
+# Particiones que revisa el barrido del outbox.
+tenants: CLIMALIMA,FRIOSUR,TECNINORTE
+
+# CORS en errores de API Gateway: equivale a las casillas Default 4XX/5XX del taller 12.
+gatewayResponses:
+  Resources:
+    Default4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        RestApiId: { Ref: ApiGatewayRestApi }
+        ResponseType: DEFAULT_4XX
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
+    Default5XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        RestApiId: { Ref: ApiGatewayRestApi }
+        ResponseType: DEFAULT_5XX
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"

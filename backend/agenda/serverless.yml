@@ -1,0 +1,151 @@
+org: ${env:SLS_ORG}
+service: api-agenda
+
+custom:
+  cors: ${file(../serverless.common.yml):cors}
+  authorizer: ${file(../serverless.common.yml):authorizer}
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: ${env:AWS_REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  timeout: 25
+  memorySize: 256
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_agenda
+    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+    ORDENES_URL: ${cf:api-ordenes-${sls:stage}.ServiceEndpoint}
+    TECNICOS_URL: ${cf:api-tecnicos-${sls:stage}.ServiceEndpoint}
+    # Vacío hasta desplegar Analítica: Agenda funciona igual, sin justificación de métricas.
+    ANALITICA_URL: ${cf:api-analitica-${sls:stage}.ServiceEndpoint, ''}
+    TECNICOS_FN: api-tecnicos-${sls:stage}-disponiblesInterno
+    ANALITICA_FN: api-analitica-${sls:stage}-tecnicosInterno
+
+package:
+  patterns: ['!tests/**', '!**/__pycache__/**']
+
+functions:
+  crear:
+    handler: handlers/visitas.crear
+    events:
+      - http: { path: visitas, method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  listar:
+    handler: handlers/visitas.listar
+    events:
+      - http: { path: visitas, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  detalle:
+    handler: handlers/visitas.detalle
+    events:
+      - http: { path: 'visitas/{visita_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  reprogramar:
+    handler: handlers/visitas.reprogramar
+    events:
+      - http: { path: 'visitas/{visita_id}/reprogramar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  cancelar:
+    handler: handlers/visitas.cancelar
+    events:
+      - http: { path: 'visitas/{visita_id}/cancelar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  iniciar:
+    handler: handlers/visitas.iniciar
+    events:
+      - http: { path: 'visitas/{visita_id}/iniciar', method: post, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  disponibilidad:
+    handler: handlers/disponibilidad.consultar
+    events:
+      - http: { path: disponibilidad, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  alertas:
+    handler: handlers/alertas.listar
+    events:
+      - http: { path: alertas, method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
+  bloquearOrden:   # Sin ruta: solo la invoca Órdenes con lambda.invoke (H1).
+    handler: handlers/control.bloquear
+  barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
+    handler: trazora_common.eventos.manejador_barrido
+    timeout: 60
+    environment:
+      TENANTS: ${file(../serverless.common.yml):tenants}
+    events:
+      - schedule: rate(5 minutes)
+  consumidor:
+    handler: handlers/consumidor.lambda_handler
+    timeout: 60   # Una ausencia puede reasignar varias visitas.
+    events:
+      - sqs:
+          arn: { "Fn::GetAtt": [ColaAgenda, Arn] }
+          batchSize: 1
+          maximumConcurrency: 2
+
+resources:
+  - ${file(../serverless.common.yml):gatewayResponses}
+  - Resources:
+      ColaFallidosAgenda:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-agenda-dlq
+          MessageRetentionPeriod: 1209600
+      ColaAgenda:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ${sls:stage}-q-agenda
+          VisibilityTimeout: 360   # 6 veces el timeout del consumidor (H22).
+          RedrivePolicy:
+            deadLetterTargetArn: { "Fn::GetAtt": [ColaFallidosAgenda, Arn] }
+            maxReceiveCount: 5
+      PoliticaColaAgenda:
+        Type: AWS::SQS::QueuePolicy
+        Properties:
+          Queues: [{ Ref: ColaAgenda }]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Principal: { Service: sns.amazonaws.com }
+                Action: sqs:SendMessage
+                Resource: { "Fn::GetAtt": [ColaAgenda, Arn] }
+                Condition:
+                  ArnEquals:
+                    aws:SourceArn: ${self:provider.environment.TOPIC_ARN}
+      SuscripcionAgenda:
+        Type: AWS::SNS::Subscription
+        Properties:
+          TopicArn: ${self:provider.environment.TOPIC_ARN}
+          Protocol: sqs
+          Endpoint: { "Fn::GetAtt": [ColaAgenda, Arn] }
+          FilterPolicy:
+            event_type: [ParteFinalizado, TecnicoAusente]
+      TablaAgenda:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: ${self:provider.environment.TABLE_NAME}
+          BillingMode: PAY_PER_REQUEST
+          AttributeDefinitions:
+            - { AttributeName: PK, AttributeType: S }
+            - { AttributeName: SK, AttributeType: S }
+            - { AttributeName: GSI1PK, AttributeType: S }
+            - { AttributeName: GSI1SK, AttributeType: S }
+            - { AttributeName: GSI2PK, AttributeType: S }
+            - { AttributeName: GSI2SK, AttributeType: S }
+            - { AttributeName: GSI3PK, AttributeType: S }
+            - { AttributeName: GSI3SK, AttributeType: S }
+          KeySchema:
+            - { AttributeName: PK, KeyType: HASH }
+            - { AttributeName: SK, KeyType: RANGE }
+          GlobalSecondaryIndexes:
+            - IndexName: GSI1   # Visitas de un técnico
+              KeySchema:
+                - { AttributeName: GSI1PK, KeyType: HASH }
+                - { AttributeName: GSI1SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI2   # Visitas de una orden
+              KeySchema:
+                - { AttributeName: GSI2PK, KeyType: HASH }
+                - { AttributeName: GSI2SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
+            - IndexName: GSI3   # Visitas de un día, para la agenda del coordinador
+              KeySchema:
+                - { AttributeName: GSI3PK, KeyType: HASH }
+                - { AttributeName: GSI3SK, KeyType: RANGE }
+              Projection: { ProjectionType: ALL }
