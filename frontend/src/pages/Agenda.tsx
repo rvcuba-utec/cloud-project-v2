@@ -3,11 +3,13 @@ import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agenda, tecnicos, todas, type Especialidad, type Visita } from '../api/recursos';
 import { BloqueVisita, Columna, Horas, LeyendaCalendario } from '../components/Calendario';
+import InputFecha from '../components/InputFecha';
 import ReprogramarVisita from '../components/ReprogramarVisita';
 import { ESPECIALIDADES, ESTADOS_VISITA, fechaLarga, horaLima, hoyLima, sumarDias } from '../components/formato';
 import { AREA, Boton, CAMPO, Campo, Cargando, Confirmacion, Encabezado, Insignia, MensajeError } from '../components/ui';
 
 const ESPERA_MS = 30_000;
+const POR_PAGINA = 8; // técnicos (columnas) por página
 
 interface ColumnaTecnico { tecnico_id: string; nombre: string; especialidades: Especialidad[]; disponible: boolean; intervalos?: { inicio: string; fin: string }[] }
 
@@ -21,6 +23,8 @@ export default function Agenda() {
   const [ausente, setAusente] = useState<ColumnaTecnico | null>(null);
   const [motivo, setMotivo] = useState('Enfermedad');
   const [esperando, setEsperando] = useState<number | null>(null);
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => setPagina(0), [fecha, especialidad, todos]);
 
   const visitas = useQuery({
     queryKey: ['visitas-dia', fecha],
@@ -46,6 +50,9 @@ export default function Agenda() {
     visitas.data?.forEach((v) => m.set(v.tecnico_id, [...(m.get(v.tecnico_id) ?? []), v]));
     return m;
   }, [visitas.data]);
+  const paginas = Math.max(1, Math.ceil(columnas.length / POR_PAGINA));
+  const actual = Math.min(pagina, paginas - 1); // si la lista se acorta, no se queda en una página vacía
+  const visibles = columnas.slice(actual * POR_PAGINA, (actual + 1) * POR_PAGINA);
   const sinTecnico = visitas.data?.filter((v) => v.requiere_reprogramacion && v.estado === 'PROGRAMADA') ?? [];
 
   const refrescar = () => ['visitas-dia', 'alertas', 'tecnicos-disponibles'].forEach((k) => consultas.invalidateQueries({ queryKey: [k] }));
@@ -64,7 +71,7 @@ export default function Agenda() {
           <Boton variante="secundario" pequeno onClick={() => setFecha(hoyLima())}>Hoy</Boton>
           <Boton variante="secundario" pequeno aria-label="Día siguiente" onClick={() => setFecha(sumarDias(fecha, 1))}>→</Boton>
         </div>
-        <input aria-label="Fecha" className={`${CAMPO} !mt-0 w-44`} type="date" value={fecha} onChange={(e) => e.target.value && setFecha(e.target.value)} />
+        <InputFecha aria-label="Fecha" className="w-44" value={fecha} onChange={setFecha} />
       </Encabezado>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -93,7 +100,16 @@ export default function Agenda() {
       )}
 
       <MensajeError error={visitas.error ?? perfiles.error ?? libres.error} />
-      <div className="mb-3"><LeyendaCalendario /></div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <LeyendaCalendario />
+        {columnas.length > POR_PAGINA && (
+          <div role="navigation" aria-label="Páginas de técnicos" className="flex items-center gap-2 text-[14px] text-muted">
+            <span>Técnicos {actual * POR_PAGINA + 1}–{Math.min((actual + 1) * POR_PAGINA, columnas.length)} de {columnas.length}</span>
+            <Boton variante="secundario" pequeno aria-label="Técnicos anteriores" disabled={actual === 0} onClick={() => setPagina(actual - 1)}>←</Boton>
+            <Boton variante="secundario" pequeno aria-label="Técnicos siguientes" disabled={actual >= paginas - 1} onClick={() => setPagina(actual + 1)}>→</Boton>
+          </div>
+        )}
+      </div>
       {visitas.isLoading || perfiles.isLoading ? <Cargando /> : columnas.length === 0 ? (
         <div className="card m-nolift items-start">
           <p className="text-[16px]">No hay visitas este día{especialidad ? ` para ${ESPECIALIDADES[especialidad].toLowerCase()}` : ''}.</p>
@@ -103,7 +119,7 @@ export default function Agenda() {
         <div className="overflow-x-auto rounded-[20px] border border-line bg-surface/40">
           <div className="flex min-w-max">
             <div className="sticky left-0 z-10 bg-ground/95 pt-16"><Horas /></div>
-            {columnas.map((t) => {
+            {visibles.map((t) => {
               const propias = (porTecnico.get(t.tecnico_id) ?? []).filter((v) => v.estado !== 'CANCELADA');
               return (
                 <div key={t.tecnico_id} className="w-44">

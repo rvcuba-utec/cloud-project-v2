@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import { agenda, type Orden } from '../api/recursos';
 import { hoyLima, instanteLima } from './formato';
+import InputFecha from './InputFecha';
 import { Boton, CAMPO, Campo, MensajeError, Tarjeta, useClaveIdempotencia } from './ui';
 
 const DURACIONES = [30, 60, 90, 120, 180, 240];
@@ -40,7 +41,7 @@ export default function ProgramarVisita({ orden, onProgramada, onCancelar }: {
   return (
     <Tarjeta className="mb-3">
       <div className="mb-3 grid gap-3 md:grid-cols-2">
-        <Campo etiqueta="Fecha"><input className={CAMPO} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+        <Campo etiqueta="Fecha"><InputFecha min={hoyLima()} value={fecha} onChange={setFecha} /></Campo>
         <Campo etiqueta="Duración">
           <select className={CAMPO} value={duracion} onChange={(e) => setDuracion(Number(e.target.value))}>
             {DURACIONES.map((d) => <option key={d} value={d}>{d} minutos</option>)}
@@ -62,7 +63,7 @@ export default function ProgramarVisita({ orden, onProgramada, onCancelar }: {
       <MensajeError error={programar.error} />
       <MensajeError error={opciones.error} />
       {opciones.isLoading && <p className="text-sm text-muted">Buscando técnicos…</p>}
-      {opciones.data?.items.length === 0 && <p className="text-sm text-muted">No hay técnicos disponibles ese día.</p>}
+      {opciones.data?.items.length === 0 && <p className="text-sm text-muted">{fecha === hoyLima() ? 'Ya no quedan horarios libres hoy. Prueba con mañana.' : 'No hay técnicos disponibles ese día.'}</p>}
       <ul className="space-y-3">
         {opciones.data?.items.map((t, i) => (
           <li key={t.tecnico_id} className={`rounded-md border p-3 ${i === 0 && t.justificacion ? 'border-accent bg-accent-soft' : 'border-line'}`}>

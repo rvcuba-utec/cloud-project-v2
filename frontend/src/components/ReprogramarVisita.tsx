@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import { agenda, type Especialidad } from '../api/recursos';
-import { ESPECIALIDADES, fechaLarga, horaLima, instanteLima } from './formato';
-import { Boton, CAMPO, Campo, Confirmacion, Insignia, MensajeError } from './ui';
+import { ESPECIALIDADES, fechaLarga, horaLima, hoyLima, instanteLima } from './formato';
+import InputFecha from './InputFecha';
+import { Boton, Campo, Confirmacion, Insignia, MensajeError } from './ui';
 
 export interface VisitaAfectada {
   visita_id: string;
@@ -58,7 +59,7 @@ export default function ReprogramarVisita({ visita, onCerrar, onHecho }: { visit
         <p className="text-sm text-muted">{ESPECIALIDADES[visita.tipo_servicio]} · {fechaLarga(visita.fecha)} · {horaOriginal}, {duracion} min · era de {visita.tecnico_nombre}</p>
         {visita.motivo && <p className="mt-2"><Insignia tono="critico">{visita.motivo}</Insignia></p>}
       </div>
-      <Campo etiqueta="Fecha"><input className={CAMPO} type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></Campo>
+      <Campo etiqueta="Fecha"><InputFecha value={fecha} onChange={setFecha} min={hoyLima()} /></Campo>
       <MensajeError error={opciones.error ?? reprogramar.error} />
       {opciones.isLoading && <p className="text-muted">Buscando técnicos libres…</p>}
       {!opciones.isLoading && !lista.length && <p className="text-muted">Nadie está libre ese día con esa especialidad. Prueba otra fecha.</p>}

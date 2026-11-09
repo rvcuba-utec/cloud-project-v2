@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agenda, analitica, tecnicos, todas, type Visita } from '../api/recursos';
 import { BloqueVisita, Columna, Horas, LeyendaCalendario } from '../components/Calendario';
+import InputFecha from '../components/InputFecha';
 import ReprogramarVisita from '../components/ReprogramarVisita';
 import { ESPECIALIDADES, fechaCorta, fechaLarga, hoyLima, lunesDe, porcentaje, sumarDias } from '../components/formato';
 import { AREA, Boton, CAMPO, Campo, Cargando, Cifra, Confirmacion, Encabezado, Insignia, MensajeError, Tarjeta } from '../components/ui';
@@ -123,7 +124,7 @@ export default function DetalleTecnico() {
       <div className="mt-6 max-w-xl">
         <Tarjeta titulo="Definir jornada">
           <form onSubmit={(e: FormEvent) => { e.preventDefault(); jornada.mutate(); }} className="space-y-3">
-            <Campo etiqueta="Fecha"><input className={CAMPO} type="date" required value={jornadaDia} onChange={(e) => setJornadaDia(e.target.value)} /></Campo>
+            <Campo etiqueta="Fecha"><InputFecha required value={jornadaDia} onChange={setJornadaDia} /></Campo>
             <div className="grid grid-cols-2 gap-3">
               <SelectorHora etiqueta="Inicio" valor={inicio} onCambio={setInicio} />
               <SelectorHora etiqueta="Fin" valor={fin} onCambio={setFin} />
