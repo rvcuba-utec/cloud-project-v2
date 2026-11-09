@@ -316,6 +316,25 @@ def test_listar_por_fecha_de_un_tecnico():
     assert len(r["items"]) == 1
 
 
+def test_sin_pasados_solo_ofrece_desde_ahora():
+    from datetime import datetime, timezone
+    ahora = datetime(2026, 11, 9, 14, 40, tzinfo=timezone.utc)  # 09:40 en Lima
+    horas = ["08:00", "09:30", "10:00", "10:30", "13:00"]
+    assert dom.sin_pasados("2026-11-09", horas, ahora) == ["10:00", "10:30", "13:00"]
+    assert dom.sin_pasados("2026-11-10", horas, ahora) == horas
+    assert dom.sin_pasados("2026-11-08", horas, ahora) == []
+    exacto = datetime(2026, 11, 9, 15, 0, tzinfo=timezone.utc)  # 10:00 en Lima
+    assert dom.sin_pasados("2026-11-09", horas, exacto)[0] == "10:00"
+
+
+def test_disponibilidad_hoy_no_propone_horas_pasadas(monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setattr(disponibilidad, "ahora_utc", lambda: datetime(2026, 11, 10, 17, 10, tzinfo=timezone.utc))  # 12:10 Lima
+    r = cuerpo(disponibilidad.consultar(peticion(ctx(), query={"fecha": "2026-11-10", "duracion_min": "60"}), None))
+    for item in r["items"]:
+        assert all(h >= "12:10" for h in item["horarios"])
+
+
 # ---- Disponibilidad
 def test_disponibilidad_quita_ocupados():
     nueva()

@@ -1,10 +1,15 @@
 import os
+from datetime import datetime, timezone
 
 from trazora_common import dynamo, interno, logs
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol, token_de_peticion
 from trazora_common.http import ApiError, api_handler, entrada_invalida, parametro_query, respuesta
 
-from dominio.agenda import horarios_libres, ordenar_candidatos, prefijo_bloques_dia, validar_fecha
+from dominio.agenda import horarios_libres, ordenar_candidatos, prefijo_bloques_dia, sin_pasados, validar_fecha
+
+def ahora_utc():
+    return datetime.now(timezone.utc)
+
 
 TIMEOUT_ANALITICA = 5  # Margen para el arranque en frío del autorizador y de la Lambda (H18).
 
@@ -40,9 +45,10 @@ def consultar(event, context):
     for bloque in dynamo.consultar_todo(dynamo.tabla(), contexto.pk, prefijo_bloques_dia(fecha)):
         ocupados.setdefault(bloque["tecnico_id"], set()).add(bloque["hora"])
 
+    ahora = ahora_utc()
     opciones = []
     for candidato in candidatos:
-        libres = horarios_libres(candidato["intervalos"], ocupados.get(candidato["tecnico_id"], set()), duracion)
+        libres = sin_pasados(fecha, horarios_libres(candidato["intervalos"], ocupados.get(candidato["tecnico_id"], set()), duracion), ahora)
         if libres:
             opciones.append({
                 "tecnico_id": candidato["tecnico_id"], "nombre": candidato["nombre"],

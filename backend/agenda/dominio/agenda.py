@@ -117,6 +117,17 @@ def horarios_libres(intervalos, ocupados, duracion_min):
     return libres
 
 
+def sin_pasados(fecha, horarios, ahora):
+    """Quita los horarios que ya empezaron. Una fecha anterior a hoy no tiene ninguno."""
+    hoy = fecha_lima(ahora)
+    if fecha < hoy:
+        return []
+    if fecha > hoy:
+        return horarios
+    limite = _minutos(hora_lima(ahora))
+    return [h for h in horarios if _minutos(h) >= limite]
+
+
 def ordenar_candidatos(candidatos, metricas):
     """Filtros duros ya aplicados. Desempates: menor carga del día, luego mayor tasa de resolución.
     Sin métricas (Analítica no disponible): orden alfabético y sin justificación."""
