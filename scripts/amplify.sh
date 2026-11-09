@@ -34,16 +34,17 @@ publicar_frontend() {
   (cd frontend/dist && zip -qr ../dist.zip .)   # el contenido de dist, no la carpeta
 
   paso "Frontend: publicando en Amplify"
-  local job url estado i
-  if ! read -r job url < <(aws amplify create-deployment --app-id "$APP_ID" --branch-name "$RAMA" \
-        --query '[jobId,zipUploadUrl]' --output text); then
-    fallo "la CLI no pudo publicar. Sube frontend/dist.zip en la consola de Amplify: app trazora-$STAGE, rama $RAMA."
-  fi
+  local job url estado i respuesta
+  # JSON y no texto: en Windows la salida de texto de la CLI trae \r y rompe la URL de subida.
+  respuesta="$(aws amplify create-deployment --app-id "$APP_ID" --branch-name "$RAMA" --output json)" \
+    || fallo "la CLI no pudo publicar. Sube frontend/dist.zip en la consola de Amplify: app trazora-$STAGE, rama $RAMA."
+  job="$(printf '%s' "$respuesta" | python3 -c 'import json,sys; print(json.load(sys.stdin)["jobId"])')"
+  url="$(printf '%s' "$respuesta" | python3 -c 'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')"
   curl --fail -sS -T frontend/dist.zip "$url" || fallo "no se pudo subir el .zip a Amplify."
   aws amplify start-deployment --app-id "$APP_ID" --branch-name "$RAMA" --job-id "$job" >/dev/null
   for i in $(seq 1 60); do
     estado="$(aws amplify get-job --app-id "$APP_ID" --branch-name "$RAMA" --job-id "$job" \
-      --query 'job.summary.status' --output text)"
+      --query 'job.summary.status' --output text | tr -d '\015')"
     case "$estado" in
       SUCCEED) echo "Publicado: $(url_web "$APP_ID")"; return 0 ;;
       FAILED|CANCELLED) fallo "Amplify terminó en estado $estado (trabajo $job)." ;;

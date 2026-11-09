@@ -50,7 +50,7 @@ url_servicio() {
 }
 
 app_amplify() {
-  aws amplify list-apps --query "apps[?name=='trazora-$STAGE'].appId | [0]" --output text
+  aws amplify list-apps --query "apps[?name=='trazora-$STAGE'].appId | [0]" --output text | tr -d '\015'
 }
 
 url_web() { echo "https://main.$1.amplifyapp.com"; }
