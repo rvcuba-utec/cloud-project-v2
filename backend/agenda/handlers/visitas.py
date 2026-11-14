@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
@@ -11,13 +12,17 @@ from trazora_common.http import (
 )
 
 from dominio.agenda import (
-    CANCELADA, EN_ATENCION, PROGRAMADA, a_utc, bloques, claves_indices, datos_evento, dentro_de_jornada,
+    CANCELADA, EN_ATENCION, PROGRAMADA, a_utc, bloques, claves_indices, datos_evento, dentro_de_jornada, exigir_futuro,
     fecha_lima, hora_lima, iso, leer_instante, sk_alerta, sk_bloque, sk_control, sk_visita, validar_fecha, validar_horario,
 )
 
 GESTION = (ADMIN, COORDINADOR)
 ESTADOS_ORDEN_SIN_VISITAS = {"CERRADA", "CANCELADA", "CIERRE_EN_PROCESO"}
 INTENTOS = 3
+
+
+def ahora_utc():
+    return datetime.now(timezone.utc)
 
 
 def _nombre_tabla():
@@ -111,6 +116,7 @@ def crear(event, context):
     orden_id = texto(datos, "orden_id", 100)
     tecnico_id = texto(datos, "tecnico_id", 100)
     inicio, fin = validar_horario(datos.get("inicio"), datos.get("fin"))
+    exigir_futuro(inicio, ahora_utc())
     pendientes = []  # Evento de este intento; solo se publica si su transacción fue la que ganó.
 
     def construir():
@@ -236,6 +242,7 @@ def reprogramar(event, context):
     datos = cuerpo_json(event)
     version = _version(datos)
     inicio, fin = validar_horario(datos.get("inicio"), datos.get("fin"))
+    exigir_futuro(inicio, ahora_utc())
     tabla_ddb = dynamo.tabla()
     visita = _visita(tabla_ddb, contexto, visita_id)
     if visita["estado"] != PROGRAMADA:

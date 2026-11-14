@@ -1,0 +1,630 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS0 Usuarios",
+    "version": "1.0.0",
+    "description": "API de MS0 Usuarios. Cada microservicio es su propia API: este documento cubre solo el servicio de usuarios.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS0 Usuarios"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Iniciar sesión",
+        "description": "Único punto donde el cliente indica la empresa (`tenant_id`). Responde 401 con el mismo mensaje si la empresa, el correo o la contraseña no coinciden.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "example": "CLIMALIMA"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                },
+                "required": [
+                  "tenant_id",
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "Token opaco para la cabecera `Authorization: Bearer <token>`."
+                    },
+                    "expira_en": {
+                      "type": "integer",
+                      "description": "Instante Unix de vencimiento (8 horas)."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "401": {
+            "$ref": "#/components/responses/CredencialesInvalidas"
+          }
+        },
+        "security": [],
+        "operationId": "usuarios_post_auth_login",
+        "tags": [
+          "MS0 Usuarios"
+        ]
+      }
+    },
+    "/usuarios": {
+      "post": {
+        "summary": "Crear usuario",
+        "description": "La contraseña exige al menos 8 caracteres. Si el rol es `TECNICO`, `tecnico_id` es obligatorio y debe ser un técnico de la misma empresa (si no existe, 404). El correo se guarda en minúsculas.\n\n**Roles permitidos:** ADMIN.\n\n**Conflictos (409):** CORREO_EN_USO (el correo ya existe en la empresa).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "format": "password"
+                  },
+                  "rol": {
+                    "type": "string",
+                    "enum": [
+                      "ADMIN",
+                      "COORDINADOR",
+                      "TECNICO"
+                    ]
+                  },
+                  "tecnico_id": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                },
+                "required": [
+                  "email",
+                  "nombre",
+                  "password",
+                  "rol"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "usuarios_post_usuarios",
+        "tags": [
+          "MS0 Usuarios"
+        ]
+      },
+      "get": {
+        "summary": "Listar usuarios",
+        "description": "**Roles permitidos:** ADMIN.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Busca por nombre o correo.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rol",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por rol.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "COORDINADOR",
+                "TECNICO"
+              ]
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por estado.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVO",
+                "INACTIVO"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Usuario"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "usuarios_get_usuarios",
+        "tags": [
+          "MS0 Usuarios"
+        ]
+      }
+    },
+    "/usuarios/me": {
+      "get": {
+        "summary": "Usuario de la sesión",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR, TECNICO.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario",
+                  "description": "Incluye `tenant_nombre`."
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "usuarios_get_usuarios_me",
+        "tags": [
+          "MS0 Usuarios"
+        ]
+      }
+    },
+    "/usuarios/{usuario_id}": {
+      "patch": {
+        "summary": "Actualizar usuario",
+        "description": "Solo cambian los campos enviados. Un administrador no puede cambiar su propio rol ni estado. Un usuario `INACTIVO` no puede iniciar sesión y sus tokens dejan de valer (hasta 60 s por la caché del autorizador). Responde 404 si el usuario o el `tecnico_id` indicado no existen en la empresa.\n\n**Roles permitidos:** ADMIN.",
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del usuario.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "rol": {
+                    "type": "string",
+                    "enum": [
+                      "ADMIN",
+                      "COORDINADOR",
+                      "TECNICO"
+                    ]
+                  },
+                  "estado": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVO",
+                      "INACTIVO"
+                    ]
+                  },
+                  "tecnico_id": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Usuario"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "usuarios_patch_usuarios_usuario_id",
+        "tags": [
+          "MS0 Usuarios"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Usuario": {
+        "type": "object",
+        "properties": {
+          "usuario_id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "rol": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "COORDINADOR",
+              "TECNICO"
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "ACTIVO",
+              "INACTIVO"
+            ]
+          },
+          "tecnico_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Obligatorio cuando el rol es TECNICO."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

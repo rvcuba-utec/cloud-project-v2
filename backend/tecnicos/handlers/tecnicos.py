@@ -36,6 +36,14 @@ def crear(event, context):
     return respuesta(resultado, 201)
 
 
+def existe_interno(event, context):
+    """Sin ruta: la invoca Usuarios con lambda.invoke antes de vincular una cuenta a un técnico (H1)."""
+    item = dynamo.tabla().get_item(
+        Key={"PK": f"TENANT#{event['tenant_id']}", "SK": sk_tecnico(event["tecnico_id"])}
+    ).get("Item")
+    return {"existe": item is not None, "activo": bool(item and item.get("activo"))}
+
+
 @api_handler
 def listar(event, context):
     contexto = obtener_contexto(event)

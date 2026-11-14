@@ -173,3 +173,10 @@ def test_ausente_no_es_candidato_interno(tema):
     r = jornadas.disponibles_interno({"tenant_id": "CLIMALIMA", "fecha": FECHA}, None)
     assert [c["tecnico_id"] for c in r["items"]] == [otro]
     json.dumps(r)  # Sin Decimal: es la respuesta de una invocación.
+
+
+def test_existe_interno_solo_confirma_tecnicos_de_la_misma_empresa():
+    t = nuevo()
+    assert tecnicos.existe_interno({"tenant_id": "CLIMALIMA", "tecnico_id": t["tecnico_id"]}, None) == {"existe": True, "activo": True}
+    assert tecnicos.existe_interno({"tenant_id": "FRIOSUR", "tecnico_id": t["tecnico_id"]}, None)["existe"] is False
+    assert tecnicos.existe_interno({"tenant_id": "CLIMALIMA", "tecnico_id": "TEC-X"}, None) == {"existe": False, "activo": False}

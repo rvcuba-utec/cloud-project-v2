@@ -1,0 +1,453 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS6 Analítica",
+    "version": "1.0.0",
+    "description": "API de MS6 Analítica. Cada microservicio es su propia API: este documento cubre solo el servicio de analitica.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS6 Analítica"
+    }
+  ],
+  "paths": {
+    "/analitica/dashboard": {
+      "get": {
+        "summary": "Resumen mensual e histórico",
+        "description": "Se alimenta de eventos: puede tardar unos segundos en reflejar un cambio reciente.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "periodo",
+            "in": "query",
+            "required": false,
+            "description": "Mes AAAA-MM (por defecto el actual).",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "periodo": {
+                      "type": "string",
+                      "example": "2026-11"
+                    },
+                    "ordenes_creadas": {
+                      "type": "integer"
+                    },
+                    "ordenes_abiertas": {
+                      "type": "integer"
+                    },
+                    "ordenes_cerradas": {
+                      "type": "integer"
+                    },
+                    "ordenes_canceladas": {
+                      "type": "integer"
+                    },
+                    "visitas_programadas": {
+                      "type": "integer"
+                    },
+                    "visitas_completadas": {
+                      "type": "integer"
+                    },
+                    "tiempo_promedio_cierre_dias": {
+                      "type": "number",
+                      "description": "Solo aparece si hubo órdenes cerradas."
+                    },
+                    "historico": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "description": "Mismos campos, de meses anteriores."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "analitica_get_analitica_dashboard",
+        "tags": [
+          "MS6 Analítica"
+        ]
+      }
+    },
+    "/analitica/tecnicos": {
+      "get": {
+        "summary": "Métricas de todos los técnicos",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "description": "Día AAAA-MM-DD (por defecto hoy en Lima).",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fecha": {
+                      "type": "string",
+                      "description": "Fecha AAAA-MM-DD (día local de Lima).",
+                      "format": "date",
+                      "example": "2026-11-20"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MetricasTecnico"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "analitica_get_analitica_tecnicos",
+        "tags": [
+          "MS6 Analítica"
+        ]
+      }
+    },
+    "/analitica/tecnicos/{tecnico_id}": {
+      "get": {
+        "summary": "Métricas de un técnico",
+        "description": "Analítica no guarda el catálogo de técnicos: un técnico sin historial devuelve los contadores en cero.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "description": "Día AAAA-MM-DD (por defecto hoy en Lima).",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "fecha": {
+                          "type": "string",
+                          "description": "Fecha AAAA-MM-DD (día local de Lima).",
+                          "format": "date",
+                          "example": "2026-11-20"
+                        }
+                      }
+                    },
+                    {
+                      "$ref": "#/components/schemas/MetricasTecnico"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "analitica_get_analitica_tecnicos_tecnico_id",
+        "tags": [
+          "MS6 Analítica"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "MetricasTecnico": {
+        "type": "object",
+        "properties": {
+          "tecnico_id": {
+            "type": "string"
+          },
+          "carga_dia": {
+            "type": "integer",
+            "description": "Visitas asignadas ese día."
+          },
+          "completadas_dia": {
+            "type": "integer"
+          },
+          "visitas_completadas_total": {
+            "type": "integer"
+          },
+          "revisitas_generadas": {
+            "type": "integer"
+          },
+          "tasa_resolucion": {
+            "type": "number",
+            "description": "Resueltas en la primera visita, de 0 a 1. No aparece sin historial."
+          },
+          "tiempo_promedio_min": {
+            "type": "number",
+            "description": "Duración media de una visita. No aparece sin historial."
+          }
+        }
+      }
+    }
+  }
+}

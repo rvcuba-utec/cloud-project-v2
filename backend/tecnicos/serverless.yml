@@ -56,6 +56,8 @@ functions:
       - http: { path: 'tecnicos/{tecnico_id}/jornadas', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
   disponiblesInterno:   # Sin ruta: solo la invoca Agenda con lambda.invoke.
     handler: handlers/jornadas.disponibles_interno
+  existeInterno:   # Sin ruta: solo la invoca Usuarios al vincular una cuenta de técnico.
+    handler: handlers/tecnicos.existe_interno
   barrerOutbox:   # Reenvía lo que no se pudo publicar (EventBridge, taller 13).
     handler: trazora_common.eventos.manejador_barrido
     timeout: 60

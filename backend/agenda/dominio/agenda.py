@@ -56,6 +56,18 @@ def validar_horario(inicio_txt, fin_txt):
     return inicio, fin
 
 
+def exigir_futuro(inicio, ahora):
+    """No se programa ni se reprograma en un horario que ya empezó (la disponibilidad tampoco lo ofrece)."""
+    if inicio < ahora:
+        raise entrada_invalida("El horario ya pasó. Elige uno a partir de ahora.", campo="inicio")
+
+
+def validar_duracion(duracion_min):
+    if duracion_min <= 0 or duracion_min % BLOQUE_MIN or duracion_min > DURACION_MAXIMA_MIN:
+        raise entrada_invalida("La duración debe ser múltiplo de 30 minutos, hasta 4 horas", campo="duracion_min")
+    return duracion_min
+
+
 def bloques(inicio, fin):
     """Instantes de inicio de cada bloque. El extremo final no se incluye:
     otra visita puede empezar justo cuando esta termina."""
@@ -104,8 +116,7 @@ def dentro_de_jornada(intervalos, inicio, fin):
 
 def horarios_libres(intervalos, ocupados, duracion_min):
     """Horas de inicio posibles: todos los bloques de la visita deben estar libres."""
-    if duracion_min <= 0 or duracion_min % BLOQUE_MIN or duracion_min > DURACION_MAXIMA_MIN:
-        raise entrada_invalida("La duración debe ser múltiplo de 30 minutos, hasta 4 horas")
+    validar_duracion(duracion_min)
     ocupados_min = {_minutos(h) for h in ocupados}
     libres = []
     for intervalo in intervalos:

@@ -1,0 +1,868 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS5 Partes",
+    "version": "1.0.0",
+    "description": "API de MS5 Partes. Cada microservicio es su propia API: este documento cubre solo el servicio de partes.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS5 Partes"
+    }
+  ],
+  "paths": {
+    "/visitas/{visita_id}/partes": {
+      "post": {
+        "summary": "Crear el parte de una visita",
+        "description": "La visita debe estar `EN_ATENCION`. Si ya hay un borrador, lo devuelve con 200 en vez de crear otro.\n\n**Roles permitidos:** TECNICO (solo sus visitas), ADMIN.\n\n**Conflictos (409):** VISITA_NO_EN_ATENCION, PARTE_YA_FINALIZADO.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Borrador creado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte",
+                  "description": "El borrador, vacío."
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Ya existía un borrador para la visita: lo devuelve.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte",
+                  "description": "El borrador, vacío."
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_post_visitas_visita_id_partes",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/visitas/{visita_id}/parte": {
+      "get": {
+        "summary": "Parte de una visita",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR, TECNICO. El técnico solo los suyos.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_get_visitas_visita_id_parte",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/partes": {
+      "get": {
+        "summary": "Listar partes de una orden",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "query",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Parte"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_get_partes",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/partes/{parte_id}": {
+      "get": {
+        "summary": "Detalle de un parte",
+        "description": "Incluye las evidencias, con URL firmada de lectura.\n\n**Roles permitidos:** ADMIN, COORDINADOR, TECNICO. El técnico solo los suyos.",
+        "parameters": [
+          {
+            "name": "parte_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del parte.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_get_partes_parte_id",
+        "tags": [
+          "MS5 Partes"
+        ]
+      },
+      "put": {
+        "summary": "Editar el borrador del parte",
+        "description": "Solo cambian los campos enviados; un borrador puede quedar incompleto.\n\n**Roles permitidos:** TECNICO (solo los suyos), ADMIN.\n\n**Conflictos (409):** PARTE_YA_FINALIZADO, VERSION_DESACTUALIZADA.",
+        "parameters": [
+          {
+            "name": "parte_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del parte.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "description": "Versión que viste por última vez. Si cambió, responde 409 VERSION_DESACTUALIZADA."
+                  },
+                  "diagnostico": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "tareas": {
+                    "type": "array",
+                    "maxItems": 30,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 300
+                    }
+                  },
+                  "materiales": {
+                    "type": "array",
+                    "maxItems": 30,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 300
+                    }
+                  },
+                  "resultado": {
+                    "type": "string",
+                    "enum": [
+                      "RESUELTO",
+                      "REQUIERE_REVISITA",
+                      "NO_ATENDIDO"
+                    ]
+                  }
+                },
+                "required": [
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_put_partes_parte_id",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/partes/{parte_id}/finalizar": {
+      "post": {
+        "summary": "Finalizar el parte",
+        "description": "Exige diagnóstico y resultado, y al menos una tarea salvo que el resultado sea `NO_ATENDIDO`. Cierra la visita y publica el resultado para Órdenes y Analítica.\n\n**Roles permitidos:** TECNICO (solo los suyos), ADMIN.\n\n**Conflictos (409):** PARTE_INCOMPLETO, VERSION_DESACTUALIZADA.",
+        "parameters": [
+          {
+            "name": "parte_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del parte.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "description": "Versión que viste por última vez. Si cambió, responde 409 VERSION_DESACTUALIZADA."
+                  }
+                },
+                "required": [
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Parte"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_post_partes_parte_id_finalizar",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/partes/{parte_id}/evidencias": {
+      "post": {
+        "summary": "Pedir URL firmada para subir una foto",
+        "description": "La foto no pasa por esta API: se sube directo a S3 con los `fields` y luego se confirma. Máximo 5 MB, JPG o PNG, y 20 solicitudes por parte.\n\n**Roles permitidos:** TECNICO (solo los suyos), ADMIN.\n\n**Conflictos (409):** PARTE_YA_FINALIZADO, EVIDENCIA_NO_ADMITIDA.",
+        "parameters": [
+          {
+            "name": "parte_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del parte.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content_type": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png"
+                    ]
+                  },
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "content_type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidencia_id": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "URL del bucket S3."
+                    },
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Campos del formulario de subida (POST multipart a `url`)."
+                    },
+                    "max_bytes": {
+                      "type": "integer",
+                      "example": 5242880
+                    },
+                    "expira_en_segundos": {
+                      "type": "integer",
+                      "example": 300
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_post_partes_parte_id_evidencias",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    },
+    "/evidencias/{evidencia_id}/confirmar": {
+      "post": {
+        "summary": "Confirmar una foto subida",
+        "description": "Revisa el archivo en S3 (tamaño y tipo). `RECHAZADA` si no cumple.\n\n**Roles permitidos:** TECNICO (solo los suyos), ADMIN.\n\n**Conflictos (409):** ARCHIVO_NO_ENCONTRADO.",
+        "parameters": [
+          {
+            "name": "evidencia_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la evidencia.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidencia_id": {
+                      "type": "string"
+                    },
+                    "estado": {
+                      "type": "string",
+                      "enum": [
+                        "CONFIRMADA",
+                        "RECHAZADA"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "partes_post_evidencias_evidencia_id_confirmar",
+        "tags": [
+          "MS5 Partes"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Evidencia": {
+        "type": "object",
+        "properties": {
+          "evidencia_id": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "CONFIRMADA",
+              "RECHAZADA"
+            ]
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL firmada de lectura (vence en minutos)."
+          }
+        }
+      },
+      "Parte": {
+        "type": "object",
+        "properties": {
+          "parte_id": {
+            "type": "string"
+          },
+          "visita_id": {
+            "type": "string"
+          },
+          "orden_id": {
+            "type": "string"
+          },
+          "tecnico_id": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "BORRADOR",
+              "FINALIZADO"
+            ]
+          },
+          "diagnostico": {
+            "type": "string"
+          },
+          "tareas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "materiales": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resultado": {
+            "type": "string",
+            "enum": [
+              "RESUELTO",
+              "REQUIERE_REVISITA",
+              "NO_ATENDIDO"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "evidencias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidencia"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

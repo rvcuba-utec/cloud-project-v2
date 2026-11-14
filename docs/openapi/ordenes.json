@@ -1,0 +1,871 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS3 Órdenes",
+    "version": "1.0.0",
+    "description": "API de MS3 Órdenes. Cada microservicio es su propia API: este documento cubre solo el servicio de ordenes.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS3 Órdenes"
+    }
+  ],
+  "paths": {
+    "/ordenes": {
+      "post": {
+        "summary": "Crear orden de trabajo",
+        "description": "La orden nace `ABIERTA`. Copia el nombre, la dirección y el punto del cliente y la ubicación. Responde 404 si el cliente o la ubicación no existen en la empresa.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** CLIENTE_INACTIVO, CLAVE_REUTILIZADA (la misma `Idempotency-Key` con otros datos).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cliente_id": {
+                    "type": "string"
+                  },
+                  "ubicacion_id": {
+                    "type": "string"
+                  },
+                  "descripcion": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "tipo_servicio": {
+                    "type": "string",
+                    "enum": [
+                      "INSTALACION",
+                      "MANTENIMIENTO",
+                      "REPARACION"
+                    ]
+                  },
+                  "prioridad": {
+                    "type": "string",
+                    "enum": [
+                      "BAJA",
+                      "MEDIA",
+                      "ALTA"
+                    ]
+                  }
+                },
+                "required": [
+                  "cliente_id",
+                  "ubicacion_id",
+                  "descripcion",
+                  "tipo_servicio",
+                  "prioridad"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_post_ordenes",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      },
+      "get": {
+        "summary": "Listar órdenes",
+        "description": "Más recientes primero (por fecha de creación; con `estado=CERRADA` o `CANCELADA`, por fecha de término). No se puede filtrar por estado y por cliente a la vez.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por estado.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ABIERTA",
+                "PROGRAMADA",
+                "EN_ATENCION",
+                "REQUIERE_REVISITA",
+                "PENDIENTE_DE_CIERRE",
+                "CIERRE_EN_PROCESO",
+                "CERRADA",
+                "CANCELADA"
+              ]
+            }
+          },
+          {
+            "name": "cliente_id",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por cliente.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Orden"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_get_ordenes",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    },
+    "/ordenes/mapa": {
+      "get": {
+        "summary": "Puntos para el mapa del panel",
+        "description": "Órdenes vivas y las cerradas en los últimos 14 días (por fecha de cierre). `conteo` cuenta hasta 400 por estado.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "puntos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "orden_id": {
+                            "type": "string"
+                          },
+                          "estado": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "cliente_nombre": {
+                            "type": "string"
+                          },
+                          "distrito": {
+                            "type": "string"
+                          },
+                          "prioridad": {
+                            "type": "string"
+                          },
+                          "tipo_servicio": {
+                            "type": "string"
+                          },
+                          "descripcion": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "conteo": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
+                    "cerradas_desde": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_get_ordenes_mapa",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    },
+    "/ordenes/{orden_id}": {
+      "get": {
+        "summary": "Detalle de una orden",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_get_ordenes_orden_id",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      },
+      "patch": {
+        "summary": "Cambiar la prioridad",
+        "description": "Solo cambia la prioridad. La versión evita pisar un cambio que el usuario no vio.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ORDEN_TERMINADA, VERSION_DESACTUALIZADA.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prioridad": {
+                    "type": "string",
+                    "enum": [
+                      "BAJA",
+                      "MEDIA",
+                      "ALTA"
+                    ]
+                  },
+                  "version": {
+                    "type": "integer",
+                    "description": "Versión que viste por última vez. Si cambió, responde 409 VERSION_DESACTUALIZADA."
+                  }
+                },
+                "required": [
+                  "prioridad",
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_patch_ordenes_orden_id",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    },
+    "/ordenes/{orden_id}/historial": {
+      "get": {
+        "summary": "Historial de eventos de la orden",
+        "description": "Más recientes primero.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_get_ordenes_orden_id_historial",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    },
+    "/ordenes/{orden_id}/cerrar": {
+      "post": {
+        "summary": "Cerrar la orden",
+        "description": "Solo desde `PENDIENTE_DE_CIERRE`. Pasa por `CIERRE_EN_PROCESO` mientras Agenda bloquea nuevas visitas. Si se interrumpe, repetir la llamada la completa. Si ya está cerrada, devuelve la orden sin cambios.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ORDEN_TERMINADA, ESTADO_NO_PERMITE, OPERACION_EN_CURSO, VISITAS_ACTIVAS, VERSION_DESACTUALIZADA, CONFLICTO_CONCURRENTE.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/CierrePendiente"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_post_ordenes_orden_id_cerrar",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    },
+    "/ordenes/{orden_id}/cancelar": {
+      "post": {
+        "summary": "Cancelar la orden",
+        "description": "Desde `ABIERTA`, `PROGRAMADA`, `REQUIERE_REVISITA` o `PENDIENTE_DE_CIERRE`. Cancela también las visitas programadas y responde cuántas en `visitas_canceladas`. Misma coordinación que `cerrar`; si una visita está en atención, se rechaza.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ORDEN_TERMINADA, ESTADO_NO_PERMITE, OPERACION_EN_CURSO, VISITA_EN_ATENCION, VERSION_DESACTUALIZADA, CONFLICTO_CONCURRENTE.",
+        "parameters": [
+          {
+            "name": "orden_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la orden.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Orden"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/CierrePendiente"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "ordenes_post_ordenes_orden_id_cancelar",
+        "tags": [
+          "MS3 Órdenes"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Orden": {
+        "type": "object",
+        "properties": {
+          "orden_id": {
+            "type": "string"
+          },
+          "cliente_id": {
+            "type": "string"
+          },
+          "ubicacion_id": {
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "distrito": {
+            "type": "string"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "tipo_servicio": {
+            "type": "string",
+            "enum": [
+              "INSTALACION",
+              "MANTENIMIENTO",
+              "REPARACION"
+            ]
+          },
+          "prioridad": {
+            "type": "string",
+            "enum": [
+              "BAJA",
+              "MEDIA",
+              "ALTA"
+            ]
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "ABIERTA",
+              "PROGRAMADA",
+              "EN_ATENCION",
+              "REQUIERE_REVISITA",
+              "PENDIENTE_DE_CIERRE",
+              "CIERRE_EN_PROCESO",
+              "CERRADA",
+              "CANCELADA"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "creada_en": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

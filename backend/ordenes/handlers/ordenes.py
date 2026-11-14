@@ -290,7 +290,10 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
                 {"orden_id": orden_id, "creada_en": orden["creada_en"], "terminada_en": ahora}, correlation_id=orden_id,
             )
             dynamo.transaccion([
-                _cambiar_estado(contexto, orden, destino, ["terminada_en = :t"], {":t": ahora}, quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
+                # En el índice por estado, una orden terminada se ordena por su fecha de término:
+                # el mapa y el listado de cerradas buscan "las terminadas en los últimos días".
+                _cambiar_estado(contexto, orden, destino, ["terminada_en = :t", "GSI1SK = :fin"],
+                                {":t": ahora, ":fin": f"{ahora}#{orden_id}"}, quitar=["operacion_cierre", "destino_cierre", "estado_previo"]),
                 _historial(contexto, orden_id, evento_tipo.upper(), detalle["fin"]),
                 eventos.operacion_outbox(evento),
             ])

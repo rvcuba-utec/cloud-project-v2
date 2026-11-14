@@ -3,11 +3,13 @@ import uuid
 
 from trazora_common import dynamo, logs, seguridad
 from trazora_common.auth import ADMIN, obtener_contexto, requiere_rol
-from trazora_common.http import api_handler, conflicto, cuerpo_json, entrada_invalida, respuesta
+from trazora_common.http import api_handler, conflicto, cuerpo_json, respuesta, texto
 
 from dominio.usuarios import (
-    ACTIVO, normalizar_email, sk_email, sk_usuario, texto_busqueda, validar_password, validar_rol, vista_publica,
+    ACTIVO, LARGO_MAXIMO_ID, LARGO_MAXIMO_NOMBRE, normalizar_email, sk_email, sk_usuario, texto_busqueda,
+    validar_password, validar_rol, vista_publica,
 )
+from handlers.vinculo import exigir_tecnico
 
 
 @api_handler
@@ -17,14 +19,14 @@ def lambda_handler(event, context):
     datos = cuerpo_json(event)
 
     email = normalizar_email(datos.get("email"))
-    nombre = str(datos.get("nombre") or "").strip()
-    if not nombre:
-        raise entrada_invalida("El nombre es obligatorio")
+    nombre = texto(datos, "nombre", LARGO_MAXIMO_NOMBRE)
     password = datos.get("password")
     validar_password(password)
     rol = datos.get("rol")
-    tecnico_id = datos.get("tecnico_id")
+    tecnico_id = texto(datos, "tecnico_id", LARGO_MAXIMO_ID, obligatorio=False)
     validar_rol(rol, tecnico_id)
+    if tecnico_id:
+        exigir_tecnico(contexto.tenant_id, tecnico_id)
 
     usuario_id = str(uuid.uuid4())
     usuario = {
