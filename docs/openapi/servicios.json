@@ -1,0 +1,37 @@
+[
+  {
+    "id": "usuarios",
+    "nombre": "MS0 Usuarios",
+    "archivo": "usuarios.json"
+  },
+  {
+    "id": "clientes",
+    "nombre": "MS1 Clientes",
+    "archivo": "clientes.json"
+  },
+  {
+    "id": "tecnicos",
+    "nombre": "MS2 Técnicos",
+    "archivo": "tecnicos.json"
+  },
+  {
+    "id": "ordenes",
+    "nombre": "MS3 Órdenes",
+    "archivo": "ordenes.json"
+  },
+  {
+    "id": "agenda",
+    "nombre": "MS4 Agenda",
+    "archivo": "agenda.json"
+  },
+  {
+    "id": "partes",
+    "nombre": "MS5 Partes",
+    "archivo": "partes.json"
+  },
+  {
+    "id": "analitica",
+    "nombre": "MS6 Analítica",
+    "archivo": "analitica.json"
+  }
+]

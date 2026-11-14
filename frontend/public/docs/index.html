@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API de Trazora FSM</title>
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css" />
+  <style>
+    body { margin: 0; background: #fafafa; }
+    .barra { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 24px; background: #0f172a; color: #f8fafc; font: 14px/1.4 system-ui, sans-serif; }
+    .barra h1 { margin: 0; font-size: 17px; font-weight: 600; }
+    .barra label { display: flex; align-items: center; gap: 8px; }
+    .barra select, .barra input { font: inherit; padding: 6px 10px; border-radius: 6px; border: 1px solid #475569; background: #1e293b; color: #f8fafc; }
+    .barra input { width: min(420px, 80vw); }
+    .aviso { padding: 10px 24px; background: #fef3c7; color: #78350f; font: 13px system-ui, sans-serif; display: none; }
+    .swagger-ui .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div class="barra">
+    <h1>API de Trazora FSM</h1>
+    <label>Servicio <select id="servicio"></select></label>
+    <label>URL base <input id="base" type="url" spellcheck="false" /></label>
+  </div>
+  <div class="aviso" id="aviso"></div>
+  <div id="ui"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui-bundle.min.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let urls = {};
+    let ui = null;
+
+    const leer = async (ruta) => {
+      const r = await fetch(ruta, { cache: 'no-store' });
+      if (!r.ok) throw new Error(ruta + ': ' + r.status);
+      return r.json();
+    };
+
+    async function cargar() {
+      const id = $('servicio').value;
+      const spec = await leer(id + '.json');
+      const base = $('base').value.trim().replace(/\/+$/, '');
+      if (base) spec.servers = [{ url: base, description: 'API de ' + id }];
+      ui = SwaggerUIBundle({
+        spec, dom_id: '#ui', deepLinking: true, persistAuthorization: true,
+        docExpansion: 'list', tryItOutEnabled: true, defaultModelsExpandDepth: 0,
+      });
+      history.replaceState(null, '', '#' + id);
+    }
+
+    async function iniciar() {
+      const servicios = await leer('servicios.json');
+      $('servicio').innerHTML = servicios.map((s) => `<option value="${s.id}">${s.nombre}</option>`).join('');
+      try { urls = await leer('urls.json'); } catch { urls = {}; }
+      const inicial = location.hash.slice(1);
+      if (servicios.some((s) => s.id === inicial)) $('servicio').value = inicial;
+
+      const ajustarBase = () => { $('base').value = urls[$('servicio').value] || ''; };
+      const avisar = () => {
+        const falta = !$('base').value.trim();
+        $('aviso').style.display = falta ? 'block' : 'none';
+        $('aviso').textContent = falta ? 'Este despliegue no publicó las URLs de las APIs. Pega la URL base del servicio (la imprime ./check.sh) para poder usar "Try it out".' : '';
+      };
+      $('servicio').addEventListener('change', () => { ajustarBase(); avisar(); cargar(); });
+      $('base').addEventListener('change', () => { avisar(); cargar(); });
+      ajustarBase(); avisar(); cargar();
+    }
+    iniciar().catch((e) => { $('aviso').style.display = 'block'; $('aviso').textContent = 'No se pudo cargar la documentación: ' + e.message; });
+  </script>
+</body>
+</html>

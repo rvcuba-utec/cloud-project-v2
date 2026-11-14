@@ -1,0 +1,787 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS1 Clientes",
+    "version": "1.0.0",
+    "description": "API de MS1 Clientes. Cada microservicio es su propia API: este documento cubre solo el servicio de clientes.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS1 Clientes"
+    }
+  ],
+  "paths": {
+    "/clientes": {
+      "post": {
+        "summary": "Crear cliente",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** CLAVE_REUTILIZADA (la misma `Idempotency-Key` con otros datos).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "telefono": {
+                    "type": "string",
+                    "maxLength": 50
+                  },
+                  "correo": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "nombre"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cliente"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_post_clientes",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      },
+      "get": {
+        "summary": "Listar clientes",
+        "description": "Ordenados por nombre.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Busca por el inicio del nombre, sin distinguir mayúsculas ni tildes.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Cliente"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_get_clientes",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      }
+    },
+    "/clientes/{cliente_id}": {
+      "get": {
+        "summary": "Detalle de un cliente",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del cliente.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cliente"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_get_clientes_cliente_id",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      },
+      "patch": {
+        "summary": "Actualizar o desactivar un cliente",
+        "description": "Se desactiva con `activo: false`; nunca se borra, para conservar el historial. Debe enviarse al menos un campo.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del cliente.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "telefono": {
+                    "type": "string",
+                    "maxLength": 50
+                  },
+                  "correo": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "activo": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cliente"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_patch_clientes_cliente_id",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      }
+    },
+    "/clientes/{cliente_id}/ubicaciones": {
+      "post": {
+        "summary": "Crear ubicación de un cliente",
+        "description": "`lat` y `lng` son opcionales, pero deben enviarse juntas. El punto se elige en el mapa.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** CLIENTE_INACTIVO, CLAVE_REUTILIZADA (la misma `Idempotency-Key` con otros datos).",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del cliente.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "direccion": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "distrito": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "referencia": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": [
+                  "nombre",
+                  "direccion",
+                  "distrito"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ubicacion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_post_clientes_cliente_id_ubicaciones",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      },
+      "get": {
+        "summary": "Listar ubicaciones de un cliente",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del cliente.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ubicacion"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_get_clientes_cliente_id_ubicaciones",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      }
+    },
+    "/clientes/{cliente_id}/ubicaciones/{ubicacion_id}": {
+      "get": {
+        "summary": "Detalle de una ubicación",
+        "description": "Incluye el nombre y el estado del cliente (Órdenes lo usa para validar y copiar los datos).\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "cliente_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del cliente.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ubicacion_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la ubicación.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ubicacion"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "cliente_nombre": {
+                          "type": "string"
+                        },
+                        "cliente_activo": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "clientes_get_clientes_cliente_id_ubicaciones_ubicacion_id",
+        "tags": [
+          "MS1 Clientes"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Cliente": {
+        "type": "object",
+        "properties": {
+          "cliente_id": {
+            "type": "string",
+            "example": "CLI-…"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "telefono": {
+            "type": "string"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "creado_en": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": true
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Ubicacion": {
+        "type": "object",
+        "properties": {
+          "ubicacion_id": {
+            "type": "string",
+            "example": "LOC-…"
+          },
+          "cliente_id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "distrito": {
+            "type": "string"
+          },
+          "referencia": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

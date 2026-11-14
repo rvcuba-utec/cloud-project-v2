@@ -22,6 +22,8 @@ provider:
   environment:
     TABLE_NAME: ${sls:stage}-t_usuarios
     TABLA_SESIONES: ${sls:stage}-t_sesiones
+    # Por nombre, no por salida de CloudFormation: Usuarios se despliega antes que Técnicos.
+    TECNICOS_FN: api-tecnicos-${sls:stage}-existeInterno
 
 package:
   patterns: ['!tests/**', '!**/__pycache__/**']

@@ -10,6 +10,8 @@ INACTIVO = "INACTIVO"
 ESTADOS = {ACTIVO, INACTIVO}
 DURACION_SESION_SEGUNDOS = 8 * 3600
 LARGO_MINIMO_PASSWORD = 8
+LARGO_MAXIMO_NOMBRE = 200
+LARGO_MAXIMO_ID = 100
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PRIVADOS = {"PK", "SK", "password_hash", "entity_type", "busqueda"}
 

@@ -5,7 +5,9 @@ from trazora_common import dynamo, interno, logs
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol, token_de_peticion
 from trazora_common.http import ApiError, api_handler, entrada_invalida, parametro_query, respuesta
 
-from dominio.agenda import horarios_libres, ordenar_candidatos, prefijo_bloques_dia, sin_pasados, validar_fecha
+from dominio.agenda import (
+    horarios_libres, ordenar_candidatos, prefijo_bloques_dia, sin_pasados, validar_duracion, validar_fecha,
+)
 
 def ahora_utc():
     return datetime.now(timezone.utc)
@@ -36,7 +38,8 @@ def consultar(event, context):
     try:
         duracion = int(parametro_query(event, "duracion_min", "60"))
     except ValueError:
-        raise entrada_invalida("duracion_min debe ser un número")
+        raise entrada_invalida("duracion_min debe ser un número", campo="duracion_min")
+    validar_duracion(duracion)  # También sin candidatos: la respuesta no depende de los datos.
 
     ruta = f"/tecnicos/disponibles?fecha={fecha}" + (f"&especialidad={especialidad}" if especialidad else "")
     candidatos = interno.llamar(os.environ["TECNICOS_URL"], ruta, token_de_peticion(event))["items"]

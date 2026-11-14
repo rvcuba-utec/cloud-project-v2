@@ -633,3 +633,23 @@ def test_otras_fechas_y_visitas_iniciadas_no_se_tocan(invocaciones):
 
 def test_alertas_solo_para_gestion():
     assert alertas.listar(peticion(ctx(rol="TECNICO", tecnico="T1")), None)["statusCode"] == 403
+
+
+# ---- Horarios pasados y duración
+def test_no_programa_ni_reprograma_en_el_pasado(monkeypatch):
+    from datetime import datetime, timezone
+    v = cuerpo(programar(inicio=I11, fin=I12))
+    monkeypatch.setattr(visitas, "ahora_utc", lambda: datetime(2026, 11, 10, 15, 30, tzinfo=timezone.utc))  # 10:30 de Lima
+    r = programar(orden="OT-2")  # 10:00, ya empezó
+    assert r["statusCode"] == 400 and cuerpo(r)["error"]["detalle"]["campo"] == "inicio"
+    assert len(cuerpo(visitas.listar(peticion(ctx(), query={"fecha": "2026-11-10"}), None))["items"]) == 1
+    r = reprogramar(v, I10, I11)
+    assert r["statusCode"] == 400
+    assert cuerpo(visitas.detalle(peticion(ctx(), ruta={"visita_id": v["visita_id"]}), None))["inicio"] == I11
+
+
+@pytest.mark.parametrize("duracion", ["45", "0", "300"])
+def test_disponibilidad_rechaza_duraciones_invalidas_aunque_no_haya_candidatos(duracion, aws):
+    aws.side_effect = lambda base, ruta, token, **kw: {"items": []}
+    r = disponibilidad.consultar(peticion(ctx(), query={"fecha": "2026-11-10", "duracion_min": duracion}), None)
+    assert r["statusCode"] == 400

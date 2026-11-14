@@ -1,0 +1,941 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS2 Técnicos",
+    "version": "1.0.0",
+    "description": "API de MS2 Técnicos. Cada microservicio es su propia API: este documento cubre solo el servicio de tecnicos.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS2 Técnicos"
+    }
+  ],
+  "paths": {
+    "/tecnicos": {
+      "post": {
+        "summary": "Crear técnico",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** CLAVE_REUTILIZADA (la misma `Idempotency-Key` con otros datos).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "especialidades": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "INSTALACION",
+                        "MANTENIMIENTO",
+                        "REPARACION"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "nombre",
+                  "especialidades"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tecnico"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_post_tecnicos",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      },
+      "get": {
+        "summary": "Listar técnicos",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Tecnico"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_get_tecnicos",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    },
+    "/tecnicos/disponibles": {
+      "get": {
+        "summary": "Técnicos con jornada en una fecha",
+        "description": "Candidatos del día en una sola consulta. Excluye técnicos inactivos, ausentes o sin jornada definida.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": true,
+            "description": "Día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          },
+          {
+            "name": "especialidad",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por especialidad.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INSTALACION",
+                "MANTENIMIENTO",
+                "REPARACION"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fecha": {
+                      "type": "string",
+                      "description": "Fecha AAAA-MM-DD (día local de Lima).",
+                      "format": "date",
+                      "example": "2026-11-20"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tecnico_id": {
+                            "type": "string"
+                          },
+                          "nombre": {
+                            "type": "string"
+                          },
+                          "especialidades": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "intervalos": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/Intervalo"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_get_tecnicos_disponibles",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    },
+    "/tecnicos/{tecnico_id}": {
+      "get": {
+        "summary": "Detalle de un técnico",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR, o TECNICO solo sobre sí mismo.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tecnico"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_get_tecnicos_tecnico_id",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      },
+      "patch": {
+        "summary": "Actualizar o desactivar un técnico",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "especialidades": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "INSTALACION",
+                        "MANTENIMIENTO",
+                        "REPARACION"
+                      ]
+                    }
+                  },
+                  "activo": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tecnico"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_patch_tecnicos_tecnico_id",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    },
+    "/tecnicos/{tecnico_id}/jornadas/{fecha}": {
+      "put": {
+        "summary": "Definir la jornada de un día",
+        "description": "Reemplaza la jornada del día. Horas locales de Lima, en HH:00 o HH:30, ordenadas y sin solaparse.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fecha",
+            "in": "path",
+            "required": true,
+            "description": "Día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "intervalos": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/components/schemas/Intervalo"
+                    }
+                  }
+                },
+                "required": [
+                  "intervalos"
+                ],
+                "example": {
+                  "intervalos": [
+                    {
+                      "inicio": "08:00",
+                      "fin": "13:00"
+                    },
+                    {
+                      "inicio": "14:00",
+                      "fin": "18:00"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Jornada"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_put_tecnicos_tecnico_id_jornadas_fecha",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    },
+    "/tecnicos/{tecnico_id}/ausencias/{fecha}": {
+      "put": {
+        "summary": "Registrar ausencia de un día",
+        "description": "Agenda reasigna las visitas de ese día. Registrarla dos veces devuelve la misma ausencia sin volver a notificar.\n\n**Roles permitidos:** ADMIN, COORDINADOR, o TECNICO solo sobre sí mismo.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fecha",
+            "in": "path",
+            "required": true,
+            "description": "Día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "motivo": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "motivo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ausencia registrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ausencia"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Ya estaba registrada: la devuelve sin cambios ni nueva notificación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ausencia"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_put_tecnicos_tecnico_id_ausencias_fecha",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    },
+    "/tecnicos/{tecnico_id}/jornadas": {
+      "get": {
+        "summary": "Consultar jornadas y ausencias de un rango",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR, o TECNICO solo sobre sí mismo.",
+        "parameters": [
+          {
+            "name": "tecnico_id",
+            "in": "path",
+            "required": true,
+            "description": "ID del técnico.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": true,
+            "description": "Primer día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": true,
+            "description": "Último día AAAA-MM-DD (rango máximo de 62 días).",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jornadas": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Jornada"
+                      }
+                    },
+                    "ausencias": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ausencia"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "tecnicos_get_tecnicos_tecnico_id_jornadas",
+        "tags": [
+          "MS2 Técnicos"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Ausencia": {
+        "type": "object",
+        "properties": {
+          "tecnico_id": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha AAAA-MM-DD (día local de Lima).",
+            "format": "date",
+            "example": "2026-11-20"
+          },
+          "motivo": {
+            "type": "string"
+          },
+          "registrada_por": {
+            "type": "string"
+          },
+          "registrada_en": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Intervalo": {
+        "type": "object",
+        "properties": {
+          "inicio": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):(00|30)$",
+            "example": "08:00"
+          },
+          "fin": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):(00|30)$",
+            "example": "13:00"
+          }
+        },
+        "required": [
+          "inicio",
+          "fin"
+        ]
+      },
+      "Jornada": {
+        "type": "object",
+        "properties": {
+          "tecnico_id": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha AAAA-MM-DD (día local de Lima).",
+            "format": "date",
+            "example": "2026-11-20"
+          },
+          "zona_horaria": {
+            "type": "string",
+            "example": "America/Lima"
+          },
+          "intervalos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Intervalo"
+            }
+          }
+        }
+      },
+      "Tecnico": {
+        "type": "object",
+        "properties": {
+          "tecnico_id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "especialidades": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "INSTALACION",
+                "MANTENIMIENTO",
+                "REPARACION"
+              ]
+            }
+          },
+          "activo": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

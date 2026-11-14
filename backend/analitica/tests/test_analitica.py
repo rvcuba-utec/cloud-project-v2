@@ -193,3 +193,17 @@ def test_ranking_interno_es_json_y_aislado():
     assert r["items"][0]["tecnico_id"] == "T1"
     json.dumps(r)
     assert consultas.tecnicos_interno({"tenant_id": "FRIOSUR", "fecha": FECHA}, None)["items"] == []
+
+
+@pytest.mark.parametrize("periodo", ["2026-13", "2026-00", "11-2026", "2026-1", "2026-11-01"])
+def test_dashboard_rechaza_periodos_que_no_existen(periodo):
+    r = consultas.dashboard(peticion(ctx(), query={"periodo": periodo}), None)
+    assert r["statusCode"] == 400 and cuerpo(r)["error"]["detalle"]["campo"] == "periodo"
+
+
+@pytest.mark.parametrize("fecha", ["2026-02-30", "2026-13-01", "hoy", "2026-1-01"])
+def test_metricas_rechazan_fechas_que_no_existen(fecha):
+    assert consultas.tecnicos(peticion(ctx(), query={"fecha": fecha}), None)["statusCode"] == 400
+    assert consultas.tecnico(peticion(ctx(), ruta={"tecnico_id": "T1"}, query={"fecha": fecha}), None)["statusCode"] == 400
+    with pytest.raises(ValueError):
+        consultas.tecnicos_interno({"tenant_id": "CLIMALIMA", "fecha": fecha}, None)

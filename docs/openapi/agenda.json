@@ -1,0 +1,906 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Trazora FSM · MS4 Agenda",
+    "version": "1.0.0",
+    "description": "API de MS4 Agenda. Cada microservicio es su propia API: este documento cubre solo el servicio de agenda.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+  },
+  "servers": [
+    {
+      "url": "https://REEMPLAZAR.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "La página /docs/ la reemplaza por la URL real del servicio."
+    }
+  ],
+  "tags": [
+    {
+      "name": "MS4 Agenda"
+    }
+  ],
+  "paths": {
+    "/visitas": {
+      "post": {
+        "summary": "Programar una visita",
+        "description": "Valida contra Órdenes y Técnicos: orden admite visitas, técnico activo, con la especialidad, presente y dentro de su jornada. Reserva bloques de 30 minutos para que dos visitas no se solapen. De 30 minutos a 4 horas, el mismo día y no en el pasado (400). Responde 404 si la orden o el técnico no existen.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ORDEN_NO_ADMITE_VISITAS, TECNICO_INACTIVO, ESPECIALIDAD_INCOMPATIBLE, TECNICO_AUSENTE, FUERA_DE_JORNADA, HORARIO_OCUPADO, CLAVE_REUTILIZADA (la misma `Idempotency-Key` con otros datos).",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orden_id": {
+                    "type": "string"
+                  },
+                  "tecnico_id": {
+                    "type": "string"
+                  },
+                  "inicio": {
+                    "type": "string",
+                    "description": "Instante UTC, en múltiplos de 30 minutos.",
+                    "format": "date-time",
+                    "example": "2026-11-20T15:00:00Z"
+                  },
+                  "fin": {
+                    "type": "string",
+                    "description": "Instante UTC, en múltiplos de 30 minutos.",
+                    "format": "date-time",
+                    "example": "2026-11-20T15:00:00Z"
+                  }
+                },
+                "required": [
+                  "orden_id",
+                  "tecnico_id",
+                  "inicio",
+                  "fin"
+                ]
+              },
+              "example": {
+                "orden_id": "ORD-…",
+                "tecnico_id": "TEC-…",
+                "inicio": "2026-11-20T15:00:00Z",
+                "fin": "2026-11-20T16:00:00Z"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Visita"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_post_visitas",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      },
+      "get": {
+        "summary": "Listar visitas",
+        "description": "Indica al menos uno de `tecnico_id`, `orden_id` o `fecha` (el técnico no necesita ninguno). Con `tecnico_id` puedes acotar con `fecha` o `desde`.\n\n**Roles permitidos:** ADMIN, COORDINADOR, TECNICO. El técnico ve siempre sus propias visitas.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Tamaño de página, de 1 a 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "`next_cursor` de la página anterior.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tecnico_id",
+            "in": "query",
+            "required": false,
+            "description": "Visitas de un técnico.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orden_id",
+            "in": "query",
+            "required": false,
+            "description": "Visitas de una orden.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": false,
+            "description": "Visitas de un día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": false,
+            "description": "Con `tecnico_id`: desde este día.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Visita"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Cursor de la página siguiente; null si no hay más."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_get_visitas",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/visitas/{visita_id}": {
+      "get": {
+        "summary": "Detalle de una visita",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR, TECNICO. El técnico solo las suyas.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Visita"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_get_visitas_visita_id",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/visitas/{visita_id}/reprogramar": {
+      "post": {
+        "summary": "Reprogramar una visita",
+        "description": "Solo visitas `PROGRAMADA` y a un horario futuro. Si falla, la reserva anterior se conserva. `tecnico_id` es opcional: sin él se mantiene el técnico.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ESTADO_NO_PERMITE, VERSION_DESACTUALIZADA, HORARIO_OCUPADO, FUERA_DE_JORNADA, TECNICO_AUSENTE, TECNICO_INACTIVO, ESPECIALIDAD_INCOMPATIBLE.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "description": "Versión que viste por última vez. Si cambió, responde 409 VERSION_DESACTUALIZADA."
+                  },
+                  "inicio": {
+                    "type": "string",
+                    "description": "Instante UTC, en múltiplos de 30 minutos.",
+                    "format": "date-time",
+                    "example": "2026-11-20T15:00:00Z"
+                  },
+                  "fin": {
+                    "type": "string",
+                    "description": "Instante UTC, en múltiplos de 30 minutos.",
+                    "format": "date-time",
+                    "example": "2026-11-20T15:00:00Z"
+                  },
+                  "tecnico_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version",
+                  "inicio",
+                  "fin"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Visita"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_post_visitas_visita_id_reprogramar",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/visitas/{visita_id}/cancelar": {
+      "post": {
+        "summary": "Cancelar una visita",
+        "description": "Libera los bloques. Repetirla no vuelve a restar del contador de la orden.\n\n**Roles permitidos:** ADMIN, COORDINADOR.\n\n**Conflictos (409):** ESTADO_NO_PERMITE, VERSION_DESACTUALIZADA.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Visita"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_post_visitas_visita_id_cancelar",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/visitas/{visita_id}/iniciar": {
+      "post": {
+        "summary": "Iniciar la atención de una visita",
+        "description": "Pasa la visita a `EN_ATENCION`. Es el paso previo a crear el parte.\n\n**Roles permitidos:** TECNICO (solo sus visitas), ADMIN.\n\n**Conflictos (409):** ESTADO_NO_PERMITE, VERSION_DESACTUALIZADA.",
+        "parameters": [
+          {
+            "name": "visita_id",
+            "in": "path",
+            "required": true,
+            "description": "ID de la visita.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Visita"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflicto"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_post_visitas_visita_id_iniciar",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/disponibilidad": {
+      "get": {
+        "summary": "Horarios libres por técnico",
+        "description": "Combina las jornadas (Técnicos) con los bloques ya ocupados (Agenda) y descarta horarios que ya pasaron. Con `sugerir=true` ordena los candidatos con las métricas de Analítica.\n\n**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": true,
+            "description": "Día AAAA-MM-DD.",
+            "schema": {
+              "type": "string",
+              "description": "Fecha AAAA-MM-DD (día local de Lima).",
+              "format": "date",
+              "example": "2026-11-20"
+            }
+          },
+          {
+            "name": "especialidad",
+            "in": "query",
+            "required": false,
+            "description": "Filtra por especialidad.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INSTALACION",
+                "MANTENIMIENTO",
+                "REPARACION"
+              ]
+            }
+          },
+          {
+            "name": "duracion_min",
+            "in": "query",
+            "required": false,
+            "description": "Duración buscada en minutos: múltiplo de 30, hasta 240 (por defecto 60).",
+            "schema": {
+              "type": "integer",
+              "default": 60,
+              "minimum": 30,
+              "maximum": 240,
+              "multipleOf": 30
+            }
+          },
+          {
+            "name": "sugerir",
+            "in": "query",
+            "required": false,
+            "description": "`true` para ordenar por carga y tasa de resolución.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fecha": {
+                      "type": "string",
+                      "description": "Fecha AAAA-MM-DD (día local de Lima).",
+                      "format": "date",
+                      "example": "2026-11-20"
+                    },
+                    "duracion_min": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tecnico_id": {
+                            "type": "string"
+                          },
+                          "nombre": {
+                            "type": "string"
+                          },
+                          "especialidades": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "horarios": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Horas de inicio posibles, por ejemplo `08:00`."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          },
+          "503": {
+            "$ref": "#/components/responses/NoDisponible"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_get_disponibilidad",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    },
+    "/alertas": {
+      "get": {
+        "summary": "Alertas de agenda",
+        "description": "**Roles permitidos:** ADMIN, COORDINADOR.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Correcto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pendientes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      },
+                      "description": "Visitas sin resolver, por inicio."
+                    },
+                    "recientes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      },
+                      "description": "Últimos 15 avisos, por ejemplo reasignaciones."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NoAutenticado"
+          },
+          "403": {
+            "$ref": "#/components/responses/Prohibido"
+          },
+          "400": {
+            "$ref": "#/components/responses/EntradaInvalida"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "agenda_get_alertas",
+        "tags": [
+          "MS4 Agenda"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token que devuelve `POST /auth/login`. Vale 8 horas."
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Identificador único de la creación. Repetir la petición con la misma clave devuelve el mismo resultado en vez de crear un duplicado.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "EntradaInvalida": {
+        "description": "Entrada inválida (`ENTRADA_INVALIDA`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "ENTRADA_INVALIDA",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoAutenticado": {
+        "description": "Sesión no válida o vencida (`NO_AUTENTICADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_AUTENTICADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Prohibido": {
+        "description": "El rol no tiene permiso (`PROHIBIDO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "PROHIBIDO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoEncontrado": {
+        "description": "No existe o es de otra empresa (`NO_ENCONTRADO`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "NO_ENCONTRADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "Conflicto": {
+        "description": "Conflicto de estado, versión u horario. El campo `error.codigo` dice cuál.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "HORARIO_OCUPADO",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CredencialesInvalidas": {
+        "description": "Empresa, correo o contraseña incorrectos, o cuenta inactiva (`CREDENCIALES_INVALIDAS`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CREDENCIALES_INVALIDAS",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "NoDisponible": {
+        "description": "Un servicio relacionado no respondió (`SERVICIO_NO_DISPONIBLE`). Se puede reintentar.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "SERVICIO_NO_DISPONIBLE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      },
+      "CierrePendiente": {
+        "description": "No se pudo confirmar con Agenda (`CIERRE_PENDIENTE`). La orden queda en `CIERRE_EN_PROCESO`: repetir la llamada la completa.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "codigo": "CIERRE_PENDIENTE",
+                "mensaje": "…",
+                "detalle": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string",
+                "example": "ENTRADA_INVALIDA"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalle": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "Visita": {
+        "type": "object",
+        "properties": {
+          "visita_id": {
+            "type": "string",
+            "example": "VIS-…"
+          },
+          "orden_id": {
+            "type": "string"
+          },
+          "tecnico_id": {
+            "type": "string"
+          },
+          "tecnico_nombre": {
+            "type": "string"
+          },
+          "cliente_nombre": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "distrito": {
+            "type": "string"
+          },
+          "tipo_servicio": {
+            "type": "string"
+          },
+          "orden_descripcion": {
+            "type": "string"
+          },
+          "inicio": {
+            "type": "string",
+            "description": "Instante UTC, en múltiplos de 30 minutos.",
+            "format": "date-time",
+            "example": "2026-11-20T15:00:00Z"
+          },
+          "fin": {
+            "type": "string",
+            "description": "Instante UTC, en múltiplos de 30 minutos.",
+            "format": "date-time",
+            "example": "2026-11-20T15:00:00Z"
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha AAAA-MM-DD (día local de Lima).",
+            "format": "date",
+            "example": "2026-11-20"
+          },
+          "numero_visita_orden": {
+            "type": "integer"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PROGRAMADA",
+              "EN_ATENCION",
+              "FINALIZADA",
+              "CANCELADA"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

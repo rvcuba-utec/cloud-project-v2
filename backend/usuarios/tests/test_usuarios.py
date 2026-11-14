@@ -5,11 +5,12 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from trazora_common import dynamo, seguridad
+from trazora_common import dynamo, interno, seguridad
 
 from handlers import actualizar, crear, listar, login, validar_token, yo
 
 ARN = "arn:aws:execute-api:us-east-1:123:api1/dev/GET/clientes"
+TECNICOS = {"CLIMALIMA": {"TEC-1"}, "FRIOSUR": {"TEC-F"}}  # Lo que respondería Técnicos (existeInterno).
 
 
 def ctx(tenant="CLIMALIMA", rol="ADMIN", usuario="ADMIN-1", tecnico=""):
@@ -38,6 +39,8 @@ def aws(monkeypatch):
     monkeypatch.setenv("TABLA_SESIONES", "t_sesiones")
     monkeypatch.setattr(seguridad, "ITERACIONES", 1000)
     monkeypatch.setattr(seguridad.hash_password, "__defaults__", (1000,))
+    monkeypatch.setenv("TECNICOS_FN", "api-tecnicos-dev-existeInterno")
+    monkeypatch.setattr(interno, "invocar", lambda fn, carga: {"existe": carga["tecnico_id"] in TECNICOS.get(carga["tenant_id"], set())})
     with mock_aws():
         dynamo.reiniciar()
         c = boto3.client("dynamodb")
@@ -93,7 +96,8 @@ def test_correo_unico_por_empresa_pero_no_entre_empresas():
 
 
 @pytest.mark.parametrize("campos", [
-    {"email": "malo"}, {"nombre": ""}, {"password": "corta"}, {"rol": "SUPERUSUARIO"}, {"rol": "TECNICO"},
+    {"email": "malo"}, {"nombre": ""}, {"nombre": 123}, {"nombre": "x" * 201}, {"password": "corta"}, {"rol": "SUPERUSUARIO"},
+    {"rol": "TECNICO"}, {"rol": "TECNICO", "tecnico_id": 99},
 ])
 def test_alta_valida_entrada(campos):
     base = {"email": "a@b.co", "nombre": "A", "password": "secreto-123", "rol": "COORDINADOR"}
@@ -213,6 +217,49 @@ def test_pasar_a_tecnico_requiere_tecnico_id():
     u = crear_usuario()
     r = actualizar.lambda_handler(peticion(ctx(), {"rol": "TECNICO"}, {"usuario_id": u["usuario_id"]}), None)
     assert r["statusCode"] == 400
+
+
+@pytest.mark.parametrize("tenant,tecnico_id", [("CLIMALIMA", "TEC-NO-EXISTE"), ("CLIMALIMA", "TEC-F")])
+def test_alta_de_tecnico_exige_un_tecnico_real_de_la_empresa(tenant, tecnico_id):
+    r = crear.lambda_handler(peticion(ctx(tenant), {"email": "t@e.co", "nombre": "T", "password": "secreto-123", "rol": "TECNICO", "tecnico_id": tecnico_id}), None)
+    assert r["statusCode"] == 404 and cuerpo(r)["error"]["codigo"] == "NO_ENCONTRADO"
+    assert iniciar(email="t@e.co")["statusCode"] == 401  # No quedó ninguna cuenta.
+
+
+def test_alta_de_tecnico_sin_respuesta_de_tecnicos_es_503_y_no_crea(monkeypatch):
+    def caido(fn, carga):
+        raise RuntimeError("sin respuesta")
+    monkeypatch.setattr(interno, "invocar", caido)
+    r = crear.lambda_handler(peticion(ctx(), {"email": "t@e.co", "nombre": "T", "password": "secreto-123", "rol": "TECNICO", "tecnico_id": "TEC-1"}), None)
+    assert r["statusCode"] == 503 and iniciar(email="t@e.co")["statusCode"] == 401
+
+
+@pytest.mark.parametrize("campos", [{"nombre": ""}, {"nombre": 123}, {"tecnico_id": 7}, {"tecnico_id": ""}])
+def test_patch_valida_tipos(campos):
+    u = crear_usuario()
+    r = actualizar.lambda_handler(peticion(ctx(), campos, {"usuario_id": u["usuario_id"]}), None)
+    assert r["statusCode"] == 400
+    assert cuerpo(listar.lambda_handler(peticion(ctx()), None))["items"][0]["nombre"] == "Ana"
+
+
+def test_patch_tecnico_id_inexistente_es_404_y_no_cambia():
+    u = crear_usuario(email="tec@e.co", rol="TECNICO", tecnico_id="TEC-1")
+    r = actualizar.lambda_handler(peticion(ctx(), {"tecnico_id": "TEC-X"}, {"usuario_id": u["usuario_id"]}), None)
+    assert r["statusCode"] == 404
+    assert cuerpo(listar.lambda_handler(peticion(ctx()), None))["items"][0]["tecnico_id"] == "TEC-1"
+
+
+def test_volver_a_tecnico_usa_el_tecnico_id_guardado():
+    u = crear_usuario(email="tec@e.co", rol="TECNICO", tecnico_id="TEC-1")
+    assert actualizar.lambda_handler(peticion(ctx(), {"rol": "COORDINADOR"}, {"usuario_id": u["usuario_id"]}), None)["statusCode"] == 200
+    r = actualizar.lambda_handler(peticion(ctx(), {"rol": "TECNICO"}, {"usuario_id": u["usuario_id"]}), None)
+    assert r["statusCode"] == 200 and cuerpo(r)["tecnico_id"] == "TEC-1"
+
+
+def test_patch_usuario_inexistente_es_404_sin_crear_nada():
+    r = actualizar.lambda_handler(peticion(ctx(), {"estado": "INACTIVO"}, {"usuario_id": "NO-EXISTE"}), None)
+    assert r["statusCode"] == 404
+    assert cuerpo(listar.lambda_handler(peticion(ctx()), None))["items"] == []
 
 
 def test_coordinador_no_modifica_usuarios():

@@ -24,3 +24,8 @@ tests/e2e/resultados/
 
 # Herramientas locales de la skill de diseño
 frontend/.taste-skill/
+# Swagger: los .json de frontend/public/docs se generan desde docs/openapi al desplegar
+frontend/public/docs/*.json
+
+# Notas personales de explicación: nunca se suben
+explicaciones/

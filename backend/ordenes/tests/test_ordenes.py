@@ -449,3 +449,19 @@ def test_rechazo_tambien_tolera_eventos_intermedios(bloqueo):
     r = ordenes.cancelar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)
     assert r["statusCode"] == 409 and cuerpo(r)["error"]["codigo"] == "VISITA_EN_ATENCION"
     assert _guardada(o)["estado"] == "ABIERTA"
+
+
+def test_mapa_muestra_las_cerradas_por_fecha_de_cierre_no_de_creacion(bloqueo, aws):
+    """Una orden creada hace meses y cerrada hoy está entre las cerradas de los últimos 14 días."""
+    from trazora_common import dynamo as ddb
+    aws.return_value = {**UBICACION, "lat": -12.12, "lng": -77.03}
+    o = nueva()
+    clave = {"PK": "TENANT#CLIMALIMA", "SK": f"ORDEN#{o['orden_id']}"}
+    ddb.tabla().update_item(Key=clave, UpdateExpression="SET creada_en = :c, GSI1SK = :s",
+                            ExpressionAttributeValues={":c": "2026-01-05T14:00:00Z", ":s": f"2026-01-05T14:00:00Z#{o['orden_id']}"})
+    _forzar_estado(o, "PENDIENTE_DE_CIERRE")
+    assert ordenes.cerrar(peticion(ctx(), ruta={"orden_id": o["orden_id"]}), None)["statusCode"] == 200
+    guardada = _guardada(o)
+    assert guardada["GSI1SK"] == f"{guardada['terminada_en']}#{o['orden_id']}"
+    r = cuerpo(ordenes.mapa(peticion(ctx()), None))
+    assert r["conteo"]["CERRADA"] == 1 and [p["orden_id"] for p in r["puntos"] if p["estado"] == "CERRADA"] == [o["orden_id"]]

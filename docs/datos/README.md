@@ -19,7 +19,7 @@ Cada servicio tiene su propia tabla DynamoDB, bajo demanda: `PK = TENANT#<id>` y
 | `t_usuarios` | `USUARIO#<id>`, `EMAIL#<correo>`, `EMPRESA` | — |
 | `t_clientes` | `CLIENTE#<id>`, `UBICACION#<cliente>#<id>` | GSI1: clientes por nombre normalizado |
 | `t_tecnicos` | `TECNICO#<id>`, `JORNADA#<tec>#<fecha>`, `AUSENCIA#<tec>#<fecha>` | — |
-| `t_ordenes` | `ORDEN#<id>`, `HIST#<orden>#<instante>#<sufijo>` | GSI1: por estado y fecha. GSI2: por cliente y fecha |
+| `t_ordenes` | `ORDEN#<id>`, `HIST#<orden>#<instante>#<sufijo>` | GSI1: por estado y fecha (de creación; de término si está cerrada o cancelada). GSI2: por cliente y fecha de creación |
 | `t_agenda` | `VISITA#<id>`, `BLOQUE#<fecha>#<tec>#<inicio>`, `CONTROL_ORDEN#<orden>` | GSI1: por técnico. GSI2: por orden. GSI3: por fecha |
 | `t_partes` | `PARTE#<id>`, `EVIDENCIA#<id>`, `MARCA_VISITA#<visita>` | GSI1: partes de una orden y evidencias de un parte |
 | `t_analitica` | `METRICAS#<tec>`, `DIA#<fecha>#<tec>`, `DASHBOARD#<AAAA-MM>` | — |

@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 from trazora_common import dynamo, interno
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol
@@ -11,9 +12,20 @@ from dominio.analitica import (
 MESES_HISTORICO = 12
 
 
+def fecha_valida(fecha):
+    """Formato y calendario: 2026-02-30 no es un día."""
+    if not isinstance(fecha, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
+        return False
+    try:
+        date.fromisoformat(fecha)
+    except ValueError:
+        return False
+    return True
+
+
 def _fecha(event):
     fecha = parametro_query(event, "fecha") or hoy_lima()
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
+    if not fecha_valida(fecha):
         raise entrada_invalida("fecha debe tener el formato AAAA-MM-DD", campo="fecha")
     return fecha
 
@@ -23,7 +35,7 @@ def dashboard(event, context):
     contexto = obtener_contexto(event)
     requiere_rol(contexto, ADMIN, COORDINADOR)
     periodo = parametro_query(event, "periodo") or periodo_actual()
-    if not re.fullmatch(r"\d{4}-\d{2}", periodo):
+    if not fecha_valida(f"{periodo}-01"):
         raise entrada_invalida("periodo debe tener el formato AAAA-MM", campo="periodo")
     tabla_ddb = dynamo.tabla()
     item = tabla_ddb.get_item(Key={"PK": contexto.pk, "SK": sk_dashboard(periodo)}).get("Item")
@@ -53,7 +65,7 @@ def ranking(pk, fecha):
 def tecnicos_interno(event, context):
     """Sin ruta: la invoca Agenda con lambda.invoke al reasignar por un evento, sin token de usuario."""
     fecha = event["fecha"]
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", fecha):
+    if not fecha_valida(fecha):
         raise ValueError("fecha no válida")
     return interno.serializable({"fecha": fecha, "items": ranking(f"TENANT#{event['tenant_id']}", fecha)})
 

@@ -263,7 +263,8 @@ class _Empresa:
             ultima, minima = finalizada, fecha + datetime.timedelta(days=1)
 
         terminada = min(ultima + datetime.timedelta(days=self.azar.randint(0, 2)), self._instante(self.base, "08:00"))
-        orden.update(resumen_visitas=resumen, terminada_en=_iso(terminada))
+        # Como en el backend: en el índice por estado, una orden terminada se ordena por su fecha de término.
+        orden.update(resumen_visitas=resumen, terminada_en=_iso(terminada), GSI1SK=f"{_iso(terminada)}#{orden_id}")
         self.salida["ordenes"] += [
             orden,
             self._historial(orden_id, creada, "ORDEN_CREADA", "Orden registrada", "a"),

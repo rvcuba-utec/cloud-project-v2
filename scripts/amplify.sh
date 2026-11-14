@@ -1,6 +1,6 @@
 # Publicación del frontend en Amplify Hosting, sin conexión a Git.
-# La portada estática va antes que la regla de la SPA: si no, Amplify la reescribiría a index.html.
-REGLA_SPA='[{"source":"/presentacion","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/index.html","target":"/presentacion/index.html","status":"200"},{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
+# La portada estática y la documentación (/docs) van antes que la regla de la SPA: si no, Amplify la reescribiría a index.html.
+REGLA_SPA='[{"source":"/presentacion","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/","target":"/presentacion/index.html","status":"200"},{"source":"/presentacion/index.html","target":"/presentacion/index.html","status":"200"},{"source":"/docs","target":"/docs/index.html","status":"200"},{"source":"/docs/","target":"/docs/index.html","status":"200"},{"source":"/docs/index.html","target":"/docs/index.html","status":"200"},{"source":"</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>","target":"/index.html","status":"200"}]'
 RAMA=main
 
 preparar_amplify() {
@@ -26,9 +26,27 @@ escribir_env_frontend() {
   done
 }
 
+preparar_docs() {
+  # Swagger: genera los specs desde los serverless.yml y publica junto a ellos las URLs reales de cada API.
+  paso "Documentación: generando OpenAPI"
+  python3 scripts/generar_openapi.py || fallo "no se pudo generar la documentación OpenAPI."
+  cp docs/openapi/*.json frontend/public/docs/
+  local s u sep="" salida=frontend/public/docs/urls.json
+  printf '{' > "$salida"
+  for s in "${SERVICIOS[@]}"; do
+    u="$(url_servicio "$s" | tr -d '\015')"
+    if [ -n "$u" ] && [ "$u" != "None" ]; then
+      printf '%s"%s":"%s"' "$sep" "$s" "$u" >> "$salida"; sep=","
+    fi
+  done
+  printf '}
+' >> "$salida"
+}
+
 publicar_frontend() {
   paso "Frontend: compilando"
   escribir_env_frontend
+  preparar_docs
   (cd frontend && npm install --silent --no-audit --no-fund && npm run build) || fallo "falló la compilación del frontend."
   rm -f frontend/dist.zip
   (cd frontend/dist && zip -qr ../dist.zip .)   # el contenido de dist, no la carpeta
