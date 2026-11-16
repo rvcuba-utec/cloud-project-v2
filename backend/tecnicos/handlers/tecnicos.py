@@ -36,6 +36,7 @@ def crear(event, context):
     return respuesta(resultado, 201)
 
 
+@logs.lambda_evento
 def existe_interno(event, context):
     """Sin ruta: la invoca Usuarios con lambda.invoke antes de vincular una cuenta a un técnico (H1)."""
     item = dynamo.tabla().get_item(

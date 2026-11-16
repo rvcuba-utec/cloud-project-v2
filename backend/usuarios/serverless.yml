@@ -1,25 +1,28 @@
 org: ${env:SLS_ORG}
 service: api-usuarios
 
+plugins:
+  - ../../infra/ingreso-privado.cjs
+
 custom:
+  ingresoPrivado: ${file(../serverless.common.yml):ingresoPrivado}
   cors: ${file(../serverless.common.yml):cors}
-  # H13: el mismo autorizador protege también las rutas de este servicio.
-  autorizador:
-    name: validarToken
-    type: token
-    identitySource: method.request.header.Authorization
-    resultTtlInSeconds: 60
+  autorizador: ${file(../serverless.common.yml):authorizer}
 
 provider:
   name: aws
+  apiGateway: ${file(../serverless.common.yml):apiGateway}
   runtime: python3.12
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${file(../serverless.common.yml):retencionLogs.${sls:stage}}
   timeout: 25
   memorySize: 256
   iam:
-    role: arn:aws:iam::${aws:accountId}:role/LabRole
+    role: arn:aws:iam::${param:cuenta, aws:accountId}:role/LabRole
   environment:
+    SERVICE_NAME: usuarios
+    STAGE: ${sls:stage}
     TABLE_NAME: ${sls:stage}-t_usuarios
     TABLA_SESIONES: ${sls:stage}-t_sesiones
     # Por nombre, no por salida de CloudFormation: Usuarios se despliega antes que Técnicos.
@@ -32,11 +35,15 @@ functions:
   validarToken:
     handler: handlers/validar_token.lambda_handler
   login:
+    environment:
+      PASSWORD_PEPPER_SECRET: ${file(../serverless.common.yml):pepper.${sls:stage}}
     handler: handlers/login.lambda_handler
     memorySize: 512   # PBKDF2 usa CPU, y esta crece con la memoria
     events:
       - http: { path: auth/login, method: post, cors: "${self:custom.cors}" }
   crear:
+    environment:
+      PASSWORD_PEPPER_SECRET: ${file(../serverless.common.yml):pepper.${sls:stage}}
     handler: handlers/crear.lambda_handler
     memorySize: 512
     events:
@@ -55,8 +62,14 @@ functions:
       - http: { path: 'usuarios/{usuario_id}', method: patch, cors: "${self:custom.cors}", authorizer: "${self:custom.autorizador}" }
 
 resources:
-  - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
+      PermisoAutorizador:
+        Type: AWS::Lambda::Permission
+        Properties:
+          FunctionName: { Fn::GetAtt: [ValidarTokenLambdaFunction, Arn] }
+          Action: lambda:InvokeFunction
+          Principal: apigateway.amazonaws.com
+          SourceArn: arn:aws:execute-api:${self:provider.region}:${param:cuenta, aws:accountId}:${self:provider.apiGateway.restApiId}/authorizers/${self:custom.autorizador.authorizerId}
       TablaUsuarios:
         Type: AWS::DynamoDB::Table
         Properties:

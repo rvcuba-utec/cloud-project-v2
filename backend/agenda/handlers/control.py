@@ -31,6 +31,7 @@ def _cancelar_programadas(tabla_ddb, tenant_id, orden_id):
     return canceladas
 
 
+@logs.lambda_evento
 def bloquear(event, context):
     """Deja de aceptar visitas solo si no hay activas. Repetir con el mismo operacion_id es seguro."""
     tenant_id, orden_id, operacion_id = event["tenant_id"], event["orden_id"], event["operacion_id"]

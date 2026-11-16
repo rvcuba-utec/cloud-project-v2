@@ -48,6 +48,8 @@ Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --sta
 
 ```bash
 ./test.sh                  # backend y frontend, sin AWS
+python scripts/validar_ingreso.py --salida .local-env/ingreso-verificado  # comprueba las 47 rutas en cada ambiente
+python scripts/probar_recorrido_local.py .local-env/ingreso-verificado  # orden, visita, parte, evidencia y Analítica
 scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
 scripts/pruebas_web.sh     # recorrido completo en un navegador real, instalado dentro del proyecto
 ```
@@ -60,11 +62,15 @@ La carga masiva va **directa a DynamoDB con boto3, nunca por API Gateway ni Lamb
 
 La carga no depende de esta laptop: se puede repetir sin duplicar y reanudar si caduca la sesión, porque los ID solo dependen de la semilla y de la fecha base (guardada en `.local-env/`). Mide primero con `--escala 0.01`.
 
+## Cambios del backend en esta rama
+
+La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. El gateway REST de cada ambiente usa VPC Link V2 y un ALB interno con 47 destinos Lambda, incluidos los de Analítica. La [guía de ambientes](docs/AMBIENTES_DEV_TEST_PROD.md) describe las rutas, el certificado HTTPS y la configuración del listener. Las URLs de la sección de despliegues corresponden a la versión anterior.
+
 ## Documentación
 
 | Tema | Dónde |
 |---|---|
-| Arquitectura | `ideas/aws-architecture.md` y `diagrams/trazora-arquitectura-tecnica.drawio` |
+| Arquitectura de esta rama | `docs/AMBIENTES_DEV_TEST_PROD.md` |
 | Rutas de la API | `docs/api.md` y `docs/postman/` |
 | Datos, claves y patrones de acceso | `docs/datos/` |
 | Guion de la demo | `docs/guia-demo.md` |

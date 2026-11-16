@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 from moto import mock_aws
 
-from apoyo_pruebas import crear_tabla, ctx, cuerpo, entorno_aws, peticion
-from trazora_common import dynamo, eventos
+from apoyo_pruebas import crear_tabla, ctx, cuerpo, entorno_aws, evento_alb, peticion
+from trazora_common import alb, dynamo, eventos
 
 from dominio import analitica as dom
 from handlers import consultas, consumidor
@@ -28,7 +28,7 @@ def evento(tipo, tenant="CLIMALIMA", event_id=None, **datos):
 
 
 def aplicar(ev):
-    consumidor.lambda_handler({"Records": [{"body": json.dumps({"Message": json.dumps(ev)})}]}, None)
+    return consumidor.lambda_handler({"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(ev)})}]}, None)
 
 
 def programada(tecnico="T1", fecha=FECHA, **kw):
@@ -47,6 +47,28 @@ def lista(fecha=FECHA, tenant="CLIMALIMA"):
 
 def mes(periodo="2026-11", tenant="CLIMALIMA"):
     return cuerpo(consultas.dashboard(peticion(ctx(tenant), query={"periodo": periodo}), None))
+
+
+def test_dashboard_y_detalle_mediante_alb(monkeypatch):
+    aplicar(programada(tecnico="TEC-1"))
+    aplicar(programada(tecnico="TEC-2", tenant="FRIOSUR"))
+    monkeypatch.setenv("STAGE", "test")
+    monkeypatch.setenv("ALB_RUTA", "GET /analitica/dashboard")
+    identidad = alb.codificar_identidad(ctx())
+    panel = evento_alb("GET", "/test/analitica/dashboard", identidad,
+                       query={"periodo": ["2026-11"], "tenant_id": ["FRIOSUR"]})
+    r = consultas.dashboard(panel, None)
+    assert r["statusCode"] == 200 and cuerpo(r)["visitas_programadas"] == 1
+
+    panel["multiValueHeaders"][alb.IDENTIDAD] = [alb.codificar_identidad(ctx(rol="TECNICO"))]
+    assert consultas.dashboard(panel, None)["statusCode"] == 403
+    monkeypatch.setenv("ALB_RUTA", "GET /analitica/tecnicos/{tecnico_id}")
+    detalle = evento_alb("GET", "/test/analitica/tecnicos/TEC-1", identidad, query={"fecha": [FECHA]})
+    assert cuerpo(consultas.tecnico(detalle, None))["carga_dia"] == 1
+    detalle["path"] = "/test/analitica/tecnicos/TEC-2"
+    assert cuerpo(consultas.tecnico(detalle, None))["carga_dia"] == 0
+    detalle["multiValueQueryStringParameters"] = {"fecha": ["inválida"]}
+    assert consultas.tecnico(detalle, None)["statusCode"] == 400
 
 
 def test_programar_suma_a_la_carga_y_cancelar_resta():
@@ -165,19 +187,17 @@ def test_fecha_invalida_es_400():
 
 
 @pytest.mark.parametrize("mensaje", [
-    {"Records": [{"body": "no es json"}]},
-    {"Records": [{"body": json.dumps({"Message": json.dumps(evento("OtroEvento"))})}]},
-    {"Records": [{"body": json.dumps({"Message": json.dumps(evento("VisitaProgramada"))})}]},
+    {"Records": [{"messageId": "m1", "body": "no es json"}]},
+    {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento("OtroEvento"))})}]},
+    {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento("VisitaProgramada"))})}]},
 ])
 def test_mensaje_invalido_falla_para_terminar_en_la_dlq(mensaje):
-    with pytest.raises(Exception):
-        consumidor.lambda_handler(mensaje, None)
+    assert consumidor.lambda_handler(mensaje, None) == {"batchItemFailures": [{"itemIdentifier": "m1"}]}
 
 
 def test_conflicto_agotado_falla_para_que_sqs_reintente():
     with mock.patch.object(dynamo, "transaccion", side_effect=RuntimeError("conflicto")):
-        with pytest.raises(RuntimeError):
-            aplicar(programada())
+        assert aplicar(programada()) == {"batchItemFailures": [{"itemIdentifier": "m1"}]}
 
 
 def test_efectos_agrupan_por_item():
@@ -207,3 +227,57 @@ def test_metricas_rechazan_fechas_que_no_existen(fecha):
     assert consultas.tecnico(peticion(ctx(), ruta={"tecnico_id": "T1"}, query={"fecha": fecha}), None)["statusCode"] == 400
     with pytest.raises(ValueError):
         consultas.tecnicos_interno({"tenant_id": "CLIMALIMA", "fecha": fecha}, None)
+
+
+def _registro(ev, identificador):
+    return {"messageId": identificador, "body": json.dumps({"Message": json.dumps(ev)})}
+
+
+def test_lote_mixto_reintenta_solo_el_fallido_y_conserva_metricas(capsys):
+    ev = programada(event_id="e1")
+    lote = {"Records": [_registro(ev, "m1"), {"messageId": "m2", "body": "secreto-fixture"}]}
+    esperado = {"batchItemFailures": [{"itemIdentifier": "m2"}]}
+    assert consumidor.lambda_handler(lote, None) == esperado
+    assert consumidor.lambda_handler(lote, None) == esperado
+    assert dynamo.tabla().get_item(Key={"PK": "TENANT#CLIMALIMA", "SK": "DASHBOARD#2026-11"})["Item"]["visitas_programadas"] == 1
+    salida = capsys.readouterr().out
+    assert "secreto-fixture" not in salida
+    entradas = [json.loads(x) for x in salida.splitlines()]
+    fallo = next(x for x in entradas if x.get("error_code") == "EVENTO_INVALIDO")
+    assert fallo["log_datos"]["message_id"] == "m2" and fallo["stacktrace"]
+
+
+def test_dashboard_denegado_devuelve_503_con_causa_privada(monkeypatch, capsys):
+    from types import SimpleNamespace
+    from botocore.exceptions import ClientError
+
+    monkeypatch.setenv("STAGE", "test")
+    monkeypatch.setenv("SERVICE_NAME", "analitica")
+    error = ClientError({"Error": {"Code": "AccessDeniedException", "Message": "contenido-privado-fixture"}}, "GetItem")
+    contexto = SimpleNamespace(aws_request_id="req-analitica-01", function_name="api-analitica-test-dashboard")
+    with mock.patch.object(dynamo, "tabla") as tabla:
+        tabla.return_value.get_item.side_effect = error
+        r = consultas.dashboard(peticion(ctx(), headers={"Authorization": "Bearer token-fixture"}), contexto)
+    assert r["statusCode"] == 503 and cuerpo(r)["error"]["request_id"] == "req-analitica-01"
+    salida = capsys.readouterr().out
+    registro = json.loads(salida)
+    assert (registro["stage"], registro["service"], registro["tenant_id"]) == ("test", "analitica", "CLIMALIMA")
+    assert registro["log_datos"]["aws_code"] == "AccessDeniedException" and registro["stacktrace"]
+    assert all(s not in salida + r["body"] for s in ["contenido-privado-fixture", "token-fixture"])
+    assert "AccessDenied" not in r["body"]
+
+
+def test_mensaje_irrecuperable_llega_a_dlq_simulada():
+    import boto3
+    sqs = boto3.client("sqs")
+    dlq = sqs.create_queue(QueueName="test-q-analitica-dlq")["QueueUrl"]
+    arn = sqs.get_queue_attributes(QueueUrl=dlq, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+    cola = sqs.create_queue(QueueName="test-q-analitica", Attributes={
+        "VisibilityTimeout": "0", "RedrivePolicy": json.dumps({"deadLetterTargetArn": arn, "maxReceiveCount": 5})})["QueueUrl"]
+    mid = sqs.send_message(QueueUrl=cola, MessageBody="malformado")["MessageId"]
+    for _ in range(5):
+        m = sqs.receive_message(QueueUrl=cola)["Messages"][0]
+        respuesta = consumidor.lambda_handler({"Records": [{"messageId": m["MessageId"], "body": m["Body"]}]}, None)
+        assert respuesta == {"batchItemFailures": [{"itemIdentifier": mid}]}
+    assert not sqs.receive_message(QueueUrl=cola).get("Messages")
+    assert sqs.receive_message(QueueUrl=dlq)["Messages"][0]["Body"] == "malformado"

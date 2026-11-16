@@ -10,6 +10,7 @@ from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 from .http import conflicto, entrada_invalida
+from .sdk import LECTURA
 
 LIMITE_MAXIMO = 100
 LIMITE_DEFECTO = 25
@@ -19,7 +20,7 @@ _recurso = None
 def recurso():
     global _recurso
     if _recurso is None:  # Se reutiliza entre invocaciones de la misma Lambda.
-        _recurso = boto3.resource("dynamodb")
+        _recurso = boto3.resource("dynamodb", config=LECTURA)
     return _recurso
 
 

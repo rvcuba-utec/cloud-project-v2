@@ -2,7 +2,7 @@
 import os
 import time
 
-from trazora_common import dynamo, seguridad
+from trazora_common import alb, dynamo, logs, seguridad
 
 from dominio.usuarios import ACTIVO, pk, sk_usuario
 
@@ -21,28 +21,29 @@ def _politica(method_arn, contexto):
                 "Resource": f"{api_y_stage}/*/*",
             }],
         },
-        "context": contexto,
+        "context": {**contexto, "identidadAlb": alb.codificar_identidad(contexto)},
     }
 
 
+@logs.lambda_evento
 def lambda_handler(event, context):
-    token = event.get("authorizationToken", "")
+    token = alb.token_autorizador(event)
     if token.startswith("Bearer "):
         token = token[7:]
     if not token:
-        raise Exception("Unauthorized")  # API Gateway lo convierte en 401; un Deny sería 403.
+        raise logs.SinSesion("Unauthorized")  # API Gateway lo convierte en 401; un Deny sería 403.
 
     sesion = dynamo.tabla(os.environ["TABLA_SESIONES"]).get_item(
         Key={"token_hash": seguridad.hash_token(token)}
     ).get("Item")
     if not sesion or int(sesion["expira_en"]) <= int(time.time()):
-        raise Exception("Unauthorized")
+        raise logs.SinSesion("Unauthorized")
 
     usuario = dynamo.tabla().get_item(
         Key={"PK": pk(sesion["tenant_id"]), "SK": sk_usuario(sesion["usuario_id"])}
     ).get("Item")
     if not usuario or usuario.get("estado") != ACTIVO:
-        raise Exception("Unauthorized")
+        raise logs.SinSesion("Unauthorized")
 
     return _politica(event["methodArn"], {
         "usuario_id": usuario["usuario_id"],

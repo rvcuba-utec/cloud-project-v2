@@ -8,6 +8,7 @@ source "$ROOT/scripts/entorno.sh"
 # shellcheck disable=SC1091
 source config.env
 STAGE="${STAGE_CLI:-${STAGE:-dev}}"
+case "$STAGE" in dev|test|prod) ;; *) echo "Stage inválido: usa dev, test o prod." >&2; exit 2 ;; esac
 export AWS_REGION="${REGION:-us-east-1}" AWS_DEFAULT_REGION="${REGION:-us-east-1}" SLS_ORG="${SLS_ORG:-}"
 [ -z "${SERVERLESS_ACCESS_KEY:-}" ] || export SERVERLESS_ACCESS_KEY
 
@@ -45,6 +46,10 @@ sincronizar_comun() {
 }
 
 url_servicio() {
+  local comun
+  comun="$(aws cloudformation describe-stacks --stack-name "trazora-shared-$STAGE" \
+    --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue | [0]" --output text 2>/dev/null | tr -d '\015')" || comun=""
+  if [ -n "$comun" ] && [ "$comun" != None ]; then printf '%s\n' "$comun"; return; fi
   aws cloudformation describe-stacks --stack-name "api-$1-$STAGE" \
     --query "Stacks[0].Outputs[?OutputKey=='ServiceEndpoint'].OutputValue | [0]" --output text 2>/dev/null || true
 }

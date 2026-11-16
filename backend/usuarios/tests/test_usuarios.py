@@ -5,7 +5,8 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from trazora_common import dynamo, interno, seguridad
+from apoyo_pruebas import evento_alb
+from trazora_common import alb, dynamo, interno, seguridad
 
 from handlers import actualizar, crear, listar, login, validar_token, yo
 
@@ -96,7 +97,7 @@ def test_correo_unico_por_empresa_pero_no_entre_empresas():
 
 
 @pytest.mark.parametrize("campos", [
-    {"email": "malo"}, {"nombre": ""}, {"nombre": 123}, {"nombre": "x" * 201}, {"password": "corta"}, {"rol": "SUPERUSUARIO"},
+    {"email": "malo"}, {"nombre": ""}, {"nombre": 123}, {"nombre": "x" * 201}, {"password": "corta"}, {"rol": "SUPERUSUARIO"}, {"rol": []}, {"rol": {}},
     {"rol": "TECNICO"}, {"rol": "TECNICO", "tecnico_id": 99},
 ])
 def test_alta_valida_entrada(campos):
@@ -150,6 +151,29 @@ def test_autorizador_entrega_contexto_y_comodin():
 def test_autorizador_rechaza_tokens_invalidos(token):
     with pytest.raises(Exception, match="^Unauthorized$"):
         autorizar(token)
+
+
+def test_login_autorizador_y_perfil_por_alb(monkeypatch):
+    usuario = crear_usuario()
+    monkeypatch.setenv("STAGE", "dev")
+    monkeypatch.setenv("ALB_RUTA", "POST /auth/login")
+    sesion = login.lambda_handler(evento_alb("POST", "/dev/auth/login", body={
+        "tenant_id": "CLIMALIMA", "email": "ana@ejemplo.com", "password": "secreto-123",
+    }), None)
+    assert sesion["statusCode"] == 200
+    bearer = "Bearer " + cuerpo(sesion)["token"]
+    request = {"type": "REQUEST", "methodArn": ARN, "headers": {"authorization": bearer}}
+    identidad = validar_token.lambda_handler(request, None)["context"]["identidadAlb"]
+    monkeypatch.setenv("ALB_RUTA", "GET /usuarios/me")
+    perfil = yo.lambda_handler(evento_alb("GET", "/dev/usuarios/me", identidad,
+                              headers={"Authorization": [bearer], "X-Tenant-Id": ["FRIOSUR"]}), None)
+    assert perfil["statusCode"] == 200 and cuerpo(perfil)["usuario_id"] == usuario["usuario_id"]
+    assert cuerpo(perfil)["tenant_id"] == "CLIMALIMA"
+    for interna in (alb.IDENTIDAD, "X-TrAzOrA-IdEnTiTy", "X-Amzn-Remapped-X-Trazora-Identity", alb.SOLICITUD):
+        with pytest.raises(Exception, match="^Unauthorized$"):
+            validar_token.lambda_handler({**request, "headers": {"Authorization": bearer, interna: "cliente"}}, None)
+    with pytest.raises(Exception, match="^Unauthorized$"):
+        validar_token.lambda_handler({**request, "multiValueHeaders": {"authorization": [bearer, bearer]}}, None)
 
 
 def test_autorizador_rechaza_sesion_vencida():
@@ -330,3 +354,24 @@ def test_filtro_encuentra_cuentas_al_final_de_muchos_perfiles(monkeypatch):
     tabla.put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": "USUARIO#USR-ADMIN", "entity_type": "USUARIO",
                          "usuario_id": "USR-ADMIN", "email": "admin@x.com", "nombre": "Admin", "rol": "ADMIN", "estado": "ACTIVO"})
     assert [u["usuario_id"] for u in listar_con(rol="ADMIN", estado="ACTIVO")["items"]] == ["USR-ADMIN"]
+
+
+def test_alta_con_secreto_y_login_con_token_opaco(monkeypatch):
+    import base64
+    from trazora_common import secretos
+
+    stage = "test"
+    nombre = secretos.nombre(stage)
+    monkeypatch.setenv("STAGE", stage)
+    monkeypatch.setenv("PASSWORD_PEPPER_SECRET", nombre)
+    monkeypatch.setattr(secretos, "_cliente", None)
+    monkeypatch.setattr(secretos, "_cache", {})
+    boto3.client("secretsmanager").create_secret(Name=nombre, SecretString=json.dumps({
+        "activa": "v1", "claves": {"v1": base64.b64encode(bytes(range(32))).decode()}}))
+    usuario = crear_usuario()
+    item = dynamo.tabla().get_item(Key={"PK": "TENANT#CLIMALIMA", "SK": "USUARIO#" + usuario["usuario_id"]})["Item"]
+    assert item["password_hash"].startswith("pbkdf2_sha256_pepper:v1$")
+    sesion = iniciar()
+    assert sesion["statusCode"] == 200
+    assert autorizar(cuerpo(sesion)["token"])["context"]["tenant_id"] == "CLIMALIMA"
+    assert iniciar(tenant="FRIOSUR")["statusCode"] == 401

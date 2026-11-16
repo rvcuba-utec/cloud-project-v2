@@ -106,7 +106,10 @@ def test_api_handler_no_filtra_errores_internos(capsys):
     r = roto({}, None)
     assert r["statusCode"] == 500
     assert "detalle interno" not in r["body"]
-    assert "detalle interno" in capsys.readouterr().out
+    registro = json.loads(capsys.readouterr().out)
+    assert "detalle interno" not in json.dumps(registro)
+    assert registro["exception_type"] == "ValueError" and registro["stacktrace"]
+    assert registro["request_id"] == json.loads(r["body"])["error"]["request_id"]
 
 
 @pytest.mark.parametrize("cuerpo", ["no es json", "[1, 2]"])
@@ -129,7 +132,7 @@ def test_logs_ocultan_secretos(capsys):
     salida = capsys.readouterr().out
     registro = json.loads(salida)
     assert registro["tipo"] == "INFO" and registro["tenant_id"] == "T"
-    assert "x1" not in salida and "x2" not in salida and "a@b" in salida
+    assert "x1" not in salida and "x2" not in salida and "a@b" not in salida
 
 
 # ---- Seguridad
@@ -289,3 +292,12 @@ def test_inbox_impide_aplicar_dos_veces(aws):
     assert error.value.fallo_condicion(0)
     item = dynamo.tabla().get_item(Key={"PK": "TENANT#A", "SK": "METRICAS#T1"})["Item"]
     assert item["visitas"] == 1
+
+
+def test_barrido_con_sns_caido_falla_y_conserva_el_outbox(aws, monkeypatch):
+    _guardar_con_outbox(_evento())
+    monkeypatch.setenv("TENANTS", "CLIMALIMA")
+    monkeypatch.setenv("TOPIC_ARN", os.environ["TOPIC_ARN"] + "-inexistente")
+    with pytest.raises(RuntimeError, match="FALLO_LAMBDA"):
+        eventos.manejador_barrido({}, None)
+    assert len(_pendientes()) == 1

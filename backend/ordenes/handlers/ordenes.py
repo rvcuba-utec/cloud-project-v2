@@ -1,8 +1,6 @@
-import json
 import os
 import uuid
 
-import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
@@ -213,14 +211,10 @@ def _historial(contexto, orden_id, tipo, detalle):
 def _pedir_bloqueo(contexto, orden_id, operacion_id, cancelar_programadas=False):
     """H1: invocación directa, sin ruta pública ni dependencia circular de despliegue.
     Al cancelar la orden, Agenda cancela antes sus visitas programadas."""
-    respuesta_lambda = boto3.client("lambda").invoke(
-        FunctionName=os.environ["AGENDA_BLOQUEO_FN"],
-        Payload=json.dumps({"tenant_id": contexto.tenant_id, "orden_id": orden_id, "operacion_id": operacion_id,
-                            "cancelar_programadas": cancelar_programadas}).encode(),
-    )
-    if respuesta_lambda.get("FunctionError"):
-        raise RuntimeError("Falló el bloqueo en Agenda")
-    return json.loads(respuesta_lambda["Payload"].read())
+    return interno.invocar(os.environ["AGENDA_BLOQUEO_FN"], {
+        "tenant_id": contexto.tenant_id, "orden_id": orden_id,
+        "operacion_id": operacion_id, "cancelar_programadas": cancelar_programadas,
+    })
 
 
 def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
@@ -262,7 +256,7 @@ def _terminar(event, destino, estados_permitidos, evento_tipo, detalle):
     try:
         resultado = _pedir_bloqueo(contexto, orden_id, operacion_id, cancelar_programadas=destino == "CANCELADA")
     except Exception as error:
-        logs.error("bloqueo_desconocido", tenant_id=contexto.tenant_id, correlation_id=orden_id, tipo_error=type(error).__name__)
+        logs.fallo("bloqueo_desconocido", error, "CIERRE_PENDIENTE", tenant_id=contexto.tenant_id, correlation_id=orden_id)
         raise ApiError(503, "CIERRE_PENDIENTE", "No se pudo confirmar con Agenda. Intenta de nuevo.")
 
     # Mientras Agenda bloqueaba (y, al cancelar, cancelaba visitas), los eventos de esas visitas pudieron

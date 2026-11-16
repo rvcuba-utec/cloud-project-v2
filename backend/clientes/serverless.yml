@@ -1,20 +1,28 @@
 org: ${env:SLS_ORG}
 service: api-clientes
 
+plugins:
+  - ../../infra/ingreso-privado.cjs
+
 custom:
+  ingresoPrivado: ${file(../serverless.common.yml):ingresoPrivado}
   cors: ${file(../serverless.common.yml):cors}
   authorizer: ${file(../serverless.common.yml):authorizer}
 
 provider:
   name: aws
+  apiGateway: ${file(../serverless.common.yml):apiGateway}
   runtime: python3.12
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${file(../serverless.common.yml):retencionLogs.${sls:stage}}
   timeout: 25
   memorySize: 256
   iam:
-    role: arn:aws:iam::${aws:accountId}:role/LabRole
+    role: arn:aws:iam::${param:cuenta, aws:accountId}:role/LabRole
   environment:
+    SERVICE_NAME: clientes
+    STAGE: ${sls:stage}
     TABLE_NAME: ${sls:stage}-t_clientes
 
 package:
@@ -51,7 +59,6 @@ functions:
       - http: { path: 'clientes/{cliente_id}/ubicaciones/{ubicacion_id}', method: get, cors: "${self:custom.cors}", authorizer: "${self:custom.authorizer}" }
 
 resources:
-  - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
       TablaClientes:
         Type: AWS::DynamoDB::Table

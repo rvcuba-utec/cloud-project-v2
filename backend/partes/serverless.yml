@@ -1,24 +1,35 @@
 org: ${env:SLS_ORG}
 service: api-partes
 
+plugins:
+  - ../../infra/ingreso-privado.cjs
+
 custom:
+  ingresoPrivado: ${file(../serverless.common.yml):ingresoPrivado}
   cors: ${file(../serverless.common.yml):cors}
   authorizer: ${file(../serverless.common.yml):authorizer}
 
 provider:
   name: aws
+  apiGateway:
+    restApiId: ${file(../serverless.common.yml):apiGateway.restApiId}
+    restApiRootResourceId: ${file(../serverless.common.yml):apiGateway.restApiRootResourceId}
+    restApiResources: ${file(../serverless.common.yml):rutasVisitas}
   runtime: python3.12
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${file(../serverless.common.yml):retencionLogs.${sls:stage}}
   timeout: 25
   memorySize: 256
   iam:
-    role: arn:aws:iam::${aws:accountId}:role/LabRole
+    role: arn:aws:iam::${param:cuenta, aws:accountId}:role/LabRole
   environment:
+    SERVICE_NAME: partes
+    STAGE: ${sls:stage}
     TABLE_NAME: ${sls:stage}-t_partes
-    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
-    AGENDA_URL: ${cf:api-agenda-${sls:stage}.ServiceEndpoint}
-    BUCKET: trazora-evidencias-${sls:stage}-${aws:accountId}
+    TOPIC_ARN: ${param:topicArn, cf:trazora-shared-${sls:stage}.TopicArn}
+    AGENDA_URL: ${file(../serverless.common.yml):apiUrl}
+    BUCKET: trazora-evidencias-${sls:stage}-${param:cuenta, aws:accountId}
   s3:
     evidencias:   # Aquí y no en resources: el evento s3 de abajo lo referencia (H20).
       name: ${self:provider.environment.BUCKET}
@@ -30,9 +41,7 @@ provider:
       corsConfiguration:
         CorsRules:
           - AllowedMethods: [POST, GET]   # POST: la subida usa un formulario firmado (H19).
-            AllowedOrigins:
-              - ${param:origenFrontend}
-              - http://localhost:5173
+            AllowedOrigins: ${file(../serverless.common.yml):origenes.${sls:stage}}
             AllowedHeaders: ['*']
 
 package:
@@ -88,7 +97,6 @@ functions:
       - schedule: rate(5 minutes)
 
 resources:
-  - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
       TablaPartes:
         Type: AWS::DynamoDB::Table

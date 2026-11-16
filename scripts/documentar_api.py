@@ -19,12 +19,12 @@ for s in SERVICIOS:
             lista.append((m.group(2).upper(), "/" + m.group(1), funcion))
     rutas[s] = lista
 
-lineas = ["# API de Trazora FSM", "", "Generado por `scripts/documentar_api.py` desde los `serverless.yml`. La URL de cada API la imprime `./check.sh`.", "",
+lineas = ["# API de Trazora FSM", "", "Generado por `scripts/documentar_api.py` desde los `serverless.yml`. La URL del ambiente la imprime `./check.sh`.", "",
           "- **Autenticación:** `Authorization: Bearer <token>`, salvo `POST /auth/login`. El tenant y el rol salen del autorizador, nunca del cuerpo ni de la URL.",
-          "- **Errores:** `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. 400 entrada inválida, 401 sin sesión, 403 sin permiso, 404 inexistente o de otra empresa, 409 conflicto de estado, versión u horario.",
+          "- **Errores:** `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. 400 entrada inválida, 401 sin sesión, 403 sin permiso, 404 inexistente o de otra empresa, 409 conflicto de estado, versión u horario. Los errores de Lambda incluyen `error.request_id` y la cabecera `X-Request-Id`. Un fallo interno devuelve 500, uno de una dependencia devuelve 502 o 503.",
           "- **Listas:** `limit` (de 1 a 100) y `cursor`; la respuesta trae `items` y `next_cursor`.",
           "- **Creaciones repetibles:** clientes, técnicos, órdenes y visitas aceptan la cabecera `Idempotency-Key`.",
-          "- **Funciones internas sin ruta** (`lambda.invoke`): `bloquearOrden` (Agenda), `disponiblesInterno` (Técnicos) y `tecnicosInterno` (Analítica).",
+          "- **Funciones internas sin ruta** (`lambda.invoke`): `bloquearOrden` (Agenda), `existeInterno` y `disponiblesInterno` (Técnicos) y `tecnicosInterno` (Analítica).",
           "- **Colección de Postman:** `docs/postman/trazora.postman_collection.json`.", ""]
 coleccion = []
 for s, lista in rutas.items():

@@ -25,7 +25,7 @@ def _metricas(event, fecha):
         datos = interno.llamar(base, f"/analitica/tecnicos?fecha={fecha}", token_de_peticion(event), timeout=TIMEOUT_ANALITICA)
         return {m["tecnico_id"]: m for m in datos.get("items", [])}
     except ApiError as error:
-        logs.error("analitica_no_disponible", codigo=error.codigo)
+        logs.fallo("analitica_no_disponible", error, error.codigo)
         return {}
 
 

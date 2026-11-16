@@ -13,7 +13,7 @@ sys.path[:0] = [str(RAIZ / "backend/common"), str(RAIZ / "backend/usuarios")]
 
 import boto3  # noqa: E402
 
-from trazora_common import dynamo, seguridad  # noqa: E402
+from trazora_common import dynamo, secretos, seguridad  # noqa: E402
 from dominio.usuarios import ACTIVO, SK_EMPRESA, pk, sk_email, sk_usuario, texto_busqueda  # noqa: E402
 
 EMPRESAS = {"CLIMALIMA": "ClimaLima", "FRIOSUR": "FríoSur", "TECNINORTE": "TecniNorte"}
@@ -58,8 +58,15 @@ def tecnico_demo(stage, tenant_id):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stage", required=True)
+    parser.add_argument("--stage", required=True, choices=("dev", "test", "prod"))
     stage = parser.parse_args().stage
+    os.environ["STAGE"] = stage
+    if stage in {"test", "prod"}:
+        os.environ["PASSWORD_PEPPER_SECRET"] = secretos.nombre(stage)
+    elif os.environ.get("TRAZORA_PEPPER_DEV"):
+        os.environ["PASSWORD_PEPPER_SECRET"] = os.environ["TRAZORA_PEPPER_DEV"]
+    if os.environ.get("PASSWORD_PEPPER_SECRET"):
+        secretos.cargar()  # Comprobar antes de escribir empresas o jornadas.
     nombre_tabla = f"{stage}-t_usuarios"
     os.environ["TABLE_NAME"] = nombre_tabla
     tabla = boto3.resource("dynamodb").Table(nombre_tabla)

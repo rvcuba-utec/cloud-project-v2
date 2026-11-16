@@ -1,23 +1,31 @@
 org: ${env:SLS_ORG}
 service: api-ordenes
 
+plugins:
+  - ../../infra/ingreso-privado.cjs
+
 custom:
+  ingresoPrivado: ${file(../serverless.common.yml):ingresoPrivado}
   cors: ${file(../serverless.common.yml):cors}
   authorizer: ${file(../serverless.common.yml):authorizer}
 
 provider:
   name: aws
+  apiGateway: ${file(../serverless.common.yml):apiGateway}
   runtime: python3.12
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${file(../serverless.common.yml):retencionLogs.${sls:stage}}
   timeout: 25
   memorySize: 256
   iam:
-    role: arn:aws:iam::${aws:accountId}:role/LabRole
+    role: arn:aws:iam::${param:cuenta, aws:accountId}:role/LabRole
   environment:
+    SERVICE_NAME: ordenes
+    STAGE: ${sls:stage}
     TABLE_NAME: ${sls:stage}-t_ordenes
-    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
-    CLIENTES_URL: ${cf:api-clientes-${sls:stage}.ServiceEndpoint}
+    TOPIC_ARN: ${param:topicArn, cf:trazora-shared-${sls:stage}.TopicArn}
+    CLIENTES_URL: ${file(../serverless.common.yml):apiUrl}
     AGENDA_BLOQUEO_FN: api-agenda-${sls:stage}-bloquearOrden
 
 package:
@@ -70,11 +78,11 @@ functions:
     events:
       - sqs:
           arn: { "Fn::GetAtt": [ColaOrdenes, Arn] }
+          functionResponseType: ReportBatchItemFailures
           batchSize: 1
           maximumConcurrency: 2
 
 resources:
-  - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
       ColaFallidosOrdenes:
         Type: AWS::SQS::Queue

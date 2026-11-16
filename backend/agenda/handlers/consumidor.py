@@ -6,9 +6,7 @@ from trazora_common import dynamo, eventos, logs
 from dominio.agenda import EN_ATENCION, FINALIZADA, datos_evento, duracion_minutos, sk_control, sk_visita
 
 
-def lambda_handler(event, context):
-    """Una excepción devuelve el mensaje a la cola; agotados los intentos, pasa a la DLQ."""
-    evento = eventos.leer_mensaje_sqs(event)
+def procesar(evento):
     if evento["event_type"] == "TecnicoAusente":
         from handlers.reasignacion import lambda_handler_ausencia
         return lambda_handler_ausencia(evento)
@@ -22,13 +20,16 @@ def lambda_handler(event, context):
     if not visita:
         raise ValueError(f"Evento {evento['event_id']}: la visita no existe")
 
+    if (datos["orden_id"], datos["tecnico_id"]) != (visita["orden_id"], visita["tecnico_id"]):
+        raise ValueError("El parte no corresponde a la asignación de la visita")
     if visita["estado"] == FINALIZADA:
-        return  # Repetido: el efecto ya se aplicó.
+        previa = tabla_ddb.get_item(Key={"PK": pk, "SK": eventos.PREFIJO_INBOX + evento["event_id"]}, ConsistentRead=True)
+        if "Item" in previa:
+            return
     if visita["estado"] != EN_ATENCION:
-        # No se reintenta: repetirlo no cambiaría el estado. Queda en los logs para revisarlo.
         logs.error("conflicto_parte_visita", tenant_id=tenant, correlation_id=datos["orden_id"],
                    visita_id=visita_id, estado=visita["estado"], event_id=evento["event_id"])
-        return
+        raise ValueError("Estado de visita incompatible")
 
     duracion = duracion_minutos(visita["iniciada_en"], datos["finalizado_en"])
     version = visita["version"] + 1
@@ -57,7 +58,8 @@ def lambda_handler(event, context):
                 "TableName": tabla,
                 "Key": {"PK": pk, "SK": sk_control(datos["orden_id"])},
                 "UpdateExpression": "ADD visitas_activas :menos",
-                "ExpressionAttributeValues": {":menos": -1},
+                "ConditionExpression": "visitas_activas > :cero",
+                "ExpressionAttributeValues": {":menos": -1, ":cero": 0},
             }},
             eventos.operacion_outbox(completada),
         ])
@@ -68,3 +70,6 @@ def lambda_handler(event, context):
         raise RuntimeError(f"Evento {evento['event_id']}: la visita cambió")  # Se reintenta y se relee.
     eventos.publicar_y_borrar(completada)
     logs.info("visita_completada", tenant_id=tenant, correlation_id=datos["orden_id"], visita_id=visita_id)
+
+
+lambda_handler = eventos.consumidor_sqs(procesar)
