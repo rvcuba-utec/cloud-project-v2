@@ -17,8 +17,21 @@ def parametros(stage):
         "cuenta": "000000000000", "restApiId": "api" + stage, "rootId": "raiz" + stage,
         "visitasId": "visitas" + stage, "visitaId": "visita" + stage, "authorizerId": "auth" + stage,
         "topicArn": f"arn:aws:sns:us-east-1:000000000000:{stage}-fsm-eventos",
+        "certificadoAlb": "arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000",
+        "dominioAlb": f"{stage}.alb.example.invalid", "albUrl": f"https://{stage}.alb.example.invalid",
+        "vpcLinkId": "link" + stage,
+        "albArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/{stage}/0000000000000000",
+        "listenerArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:listener/app/{stage}/0000000000000000/0000000000000001",
         "origenFrontend": f"https://{stage}.example.invalid",
     }
+
+
+def entorno_local():
+    env = {**os.environ, "AWS_EC2_METADATA_DISABLED": "true", "AWS_REGION": "us-east-1",
+           "AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_SESSION_TOKEN": "testing",
+           "SLS_TELEMETRY_DISABLED": "1", "SLS_ORG": os.getenv("SLS_ORG") or "trazoralocal"}
+    env.pop("TRAZORA_PEPPER_DEV", None)
+    return env
 
 
 def imprimir(cli, node, nombre, stage, salida):
@@ -26,12 +39,8 @@ def imprimir(cli, node, nombre, stage, salida):
     valores = parametros(stage)
     args = [node, str(cli), "print", "--stage", stage, "--format", "json"]
     args += [f"--param={k}={v}" for k, v in valores.items()]
-    env = {**os.environ, "AWS_EC2_METADATA_DISABLED": "true", "AWS_REGION": "us-east-1",
-           "AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_SESSION_TOKEN": "testing",
-           "SLS_TELEMETRY_DISABLED": "1", "SLS_ORG": os.getenv("SLS_ORG") or "trazoralocal"}
-    env.pop("TRAZORA_PEPPER_DEV", None)
     run = subprocess.run(args, cwd=ruta, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                         env=env, timeout=100)
+                         env=entorno_local(), timeout=100)
     texto = run.stdout
     inicio = next((i for i, line in enumerate(texto.splitlines()) if line.strip() == "{"), None)
     if run.returncode or inicio is None:

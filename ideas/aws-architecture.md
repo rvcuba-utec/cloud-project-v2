@@ -1,5 +1,7 @@
 # Trazora FSM — Arquitectura técnica en AWS
 
+> Esta vista describe el despliegue de referencia. La [arquitectura de la rama](../docs/AMBIENTES_DEV_TEST_PROD.md) incorpora un gateway REST, VPC Link V2 y un ALB interno por ambiente.
+
 Vista técnica de **todos los recursos AWS** desplegados, derivada de la [propuesta final](proposal.md) y comprobada contra el código de `backend/`. Los diagramas están en Mermaid.
 
 - Flechas continuas: invocación o flujo de datos.

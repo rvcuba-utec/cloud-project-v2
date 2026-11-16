@@ -1,8 +1,9 @@
-"""Entrada y salida de las Lambdas de API (integración proxy de API Gateway)."""
+"""Entrada y salida de las Lambdas HTTP de Trazora."""
 import base64
 import binascii
 import functools
 import json
+import os
 from decimal import Decimal
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -140,16 +141,26 @@ def _error_aws(exc):
 
 
 def api_handler(funcion):
+    from . import alb
+
     @functools.wraps(funcion)
     def envoltura(event, context):
-        with logs.invocacion(funcion, event, context) as rid:
+        gateway = event.get("requestContext") if isinstance(event, dict) else None
+        es_alb = isinstance(gateway, dict) and "elb" in gateway
+        ruta_alb = os.getenv("ALB_RUTA")
+        with logs.invocacion(funcion, {} if es_alb or ruta_alb else event, context) as rid:
             try:
-                return funcion(event, context)
+                if es_alb:
+                    event = alb.peticion(event)
+                    logs.contexto_http(event["requestContext"])
+                elif ruta_alb:
+                    raise no_autenticado()
+                resultado = funcion(event, context)
             except Exception as exc:
                 error = exc if isinstance(exc, ApiError) else _error_aws(exc)
                 operacion = f"{funcion.__module__}.{funcion.__name__}"
                 logs.fallo(operacion, exc, error.codigo, nivel="ERROR" if error.status >= 500 else "WARNING")
                 resultado = respuesta_error(error, rid)
                 resultado["headers"]["X-Request-Id"] = rid
-                return resultado
+            return alb.respuesta(resultado) if es_alb else resultado
     return envoltura

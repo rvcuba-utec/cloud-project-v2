@@ -46,6 +46,12 @@ def invocacion(funcion, event, context):
         _contexto.reset(marca)
 
 
+def contexto_http(peticion):
+    actual = _contexto.get()
+    _contexto.set({**actual, "correlation_id": identificador(peticion.get("requestId")) or actual["request_id"],
+                   "tenant_id": identificador((peticion.get("authorizer") or {}).get("tenant_id"))})
+
+
 def _registro(nivel, operacion, tenant_id=None, correlation_id=None, **datos):
     campos = {}
     for clave, valor in datos.items():

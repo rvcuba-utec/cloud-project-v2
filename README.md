@@ -48,6 +48,7 @@ Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --sta
 
 ```bash
 ./test.sh                  # backend y frontend, sin AWS
+python scripts/validar_ingreso.py  # empaqueta y comprueba las 47 rutas en dev, test y prod
 scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
 scripts/pruebas_web.sh     # recorrido completo en un navegador real, instalado dentro del proyecto
 ```
@@ -62,13 +63,13 @@ La carga no depende de esta laptop: se puede repetir sin duplicar y reanudar si 
 
 ## Cambios del backend en esta rama
 
-La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. Incluye el gateway por ambiente, los resultados locales de fallos controlados y la preparación de Secrets Manager. Las URLs de la sección de despliegues corresponden a la versión anterior.
+La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. El gateway REST de cada ambiente usa VPC Link V2 y un ALB interno con 47 destinos Lambda, incluidos los de Analítica. La [guía de ambientes](docs/AMBIENTES_DEV_TEST_PROD.md) describe las rutas, el certificado HTTPS y la configuración del listener. Las URLs de la sección de despliegues corresponden a la versión anterior.
 
 ## Documentación
 
 | Tema | Dónde |
 |---|---|
-| Arquitectura | `ideas/aws-architecture.md` y `diagrams/trazora-arquitectura-tecnica.drawio` |
+| Arquitectura de esta rama | `docs/AMBIENTES_DEV_TEST_PROD.md` |
 | Rutas de la API | `docs/api.md` y `docs/postman/` |
 | Datos, claves y patrones de acceso | `docs/datos/` |
 | Guion de la demo | `docs/guia-demo.md` |

@@ -20,11 +20,25 @@ desplegar_servicio() {
 
 desplegar_backend() {
   paso "Backend: recursos compartidos"
-  (cd infra/shared && serverless deploy --stage "$STAGE") || fallo "falló el stack compartido."
+  local args=(--stage "$STAGE" --param="certificadoAlb=$CERTIFICADO_ALB" --param="dominioAlb=$DOMINIO_ALB")
+  if [[ -n "${TRAZORA_AZ_ID_A:-}" ]]; then args+=(--param="azIdA=$TRAZORA_AZ_ID_A" --param="azIdB=$TRAZORA_AZ_ID_B"); fi
+  (cd infra/shared && serverless deploy "${args[@]}") || fallo "falló el stack compartido."
   sincronizar_comun
   local s
   for s in "${SERVICIOS[@]}"; do desplegar_servicio "$s"; done
 }
+
+if [[ "$OBJETIVO" == todo || "$OBJETIVO" == backend ]]; then
+  if [[ -n "${TRAZORA_AZ_ID_A:-}${TRAZORA_AZ_ID_B:-}" || "$AWS_REGION" != us-east-1 ]]; then
+    [[ -n "${TRAZORA_AZ_ID_A:-}" && -n "${TRAZORA_AZ_ID_B:-}" && "$TRAZORA_AZ_ID_A" != "$TRAZORA_AZ_ID_B" ]] ||
+      fallo "define TRAZORA_AZ_ID_A y TRAZORA_AZ_ID_B con dos AZ distintas que admitan VPC Link V2."
+  fi
+  var_cert="TRAZORA_ALB_CERT_ARN_${STAGE^^}"
+  var_dns="TRAZORA_ALB_DOMINIO_${STAGE^^}"
+  CERTIFICADO_ALB="${!var_cert:-}"
+  DOMINIO_ALB="${!var_dns:-}"
+  [[ -n "$CERTIFICADO_ALB" && -n "$DOMINIO_ALB" ]] || fallo "define $var_cert y $var_dns en config.env para el listener HTTPS."
+fi
 
 comprobar_entorno
 preparar_amplify      # define APP_ID y ORIGEN_FRONTEND

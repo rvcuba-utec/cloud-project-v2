@@ -42,5 +42,15 @@ def peticion(autorizador=None, body=None, ruta=None, query=None, headers=None):
     }
 
 
+def evento_alb(metodo, ruta, identidad=None, *, headers=None, query=None, body=None):
+    cabeceras = {"x-trazora-request-id": ["req-alb-local"], **(headers or {})}
+    if identidad:
+        cabeceras["x-trazora-identity"] = [identidad]
+    return {"requestContext": {"elb": {"targetGroupArn": "arn:local:targetgroup/ruta"}},
+            "httpMethod": metodo, "path": ruta, "multiValueHeaders": cabeceras,
+            "multiValueQueryStringParameters": query or {}, "isBase64Encoded": False,
+            "body": json.dumps(body) if body is not None else None}
+
+
 def cuerpo(respuesta):
     return json.loads(respuesta["body"])

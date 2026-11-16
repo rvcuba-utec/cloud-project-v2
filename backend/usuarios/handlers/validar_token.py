@@ -2,7 +2,7 @@
 import os
 import time
 
-from trazora_common import dynamo, logs, seguridad
+from trazora_common import alb, dynamo, logs, seguridad
 
 from dominio.usuarios import ACTIVO, pk, sk_usuario
 
@@ -21,13 +21,13 @@ def _politica(method_arn, contexto):
                 "Resource": f"{api_y_stage}/*/*",
             }],
         },
-        "context": contexto,
+        "context": {**contexto, "identidadAlb": alb.codificar_identidad(contexto)},
     }
 
 
 @logs.lambda_evento
 def lambda_handler(event, context):
-    token = event.get("authorizationToken", "")
+    token = alb.token_autorizador(event)
     if token.startswith("Bearer "):
         token = token[7:]
     if not token:

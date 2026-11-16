@@ -10,8 +10,8 @@ La referencia de partida es `rvcuba-utec/cloud-project-v2@7817304`. El paquete a
 | Cuenta Academy consultada, us-east-1, 16 de noviembre de 2026 | STS válido. En dev hay 8 stacks, 60 funciones, 8 tablas, 1 tema y 6 colas del proyecto. CloudFormation registra 7 API REST, 1 tema y 6 colas en los stacks de dev. Los mappings de Agenda, Órdenes y Analítica figuran como **Disabled**. |
 | Test y prod en esa cuenta y región | Cero stacks activos, Lambda, tablas, temas o colas con los nombres esperados. El README base enlaza también una demo de prod. Estos resultados solo describen la cuenta y región consultadas. |
 | Secrets Manager | Los tres nombres previstos devolvieron `ResourceNotFoundException`. No se verificaron KMS, creación del secreto ni lectura real del pepper. |
-| Solución de la rama | Se resolvieron los 24 archivos de configuración (ocho stacks por tres ambientes) y se compilaron los ocho stacks de test localmente con parámetros ficticios. Los ZIP de servicio contienen sus handlers y la librería común. Detalles y versión de las herramientas en la [guía de fallos](PRUEBAS_FALLOS_CONTROLADOS.md). |
-| Alcance de la validación | Pruebas de Lambda, dominio, persistencia y fallos con Moto/mocks. La lectura de AWS inventarió el despliegue anterior. El gateway compartido, las Lambdas modificadas y el nuevo secreto requieren una futura validación integrada en un ambiente autorizado. |
+| Solución de la rama | Se resolvieron los 24 archivos de configuración (ocho stacks por tres ambientes) y se compilaron las 24 plantillas localmente con parámetros ficticios. Las reglas del ALB se cotejaron con OpenAPI y se verificaron con cfn-lint. Los ZIP de servicio contienen sus handlers y la librería común. Detalles y versión de las herramientas en la [guía de fallos](PRUEBAS_FALLOS_CONTROLADOS.md). |
+| Alcance de la validación | Pruebas de Lambda, dominio, persistencia y fallos con Moto/mocks. La lectura de AWS inventarió el despliegue anterior. El tráfico real a través del gateway compartido, del VPC Link V2 y del ALB, las Lambdas modificadas y el nuevo secreto requieren una futura validación integrada en un ambiente autorizado. |
 
 ## Hallazgos corregidos
 
@@ -19,7 +19,7 @@ La referencia de partida es `rvcuba-utec/cloud-project-v2@7817304`. El paquete a
 - Los tres consumidores solo procesaban el primer registro. Ahora devuelven los identificadores SQS fallidos mediante `ReportBatchItemFailures`. Un mensaje incompatible sigue el redrive de la cola. Un mensaje ya aplicado se reconoce por su INBOX transaccional. En Agenda se valida también que orden y técnico correspondan a la visita y que el contador no se vuelva negativo.
 - Al caer SNS, un cambio ya confirmado queda en la tabla con su OUTBOX. Si el barrido tampoco puede publicarlo, la invocación programada falla y EventBridge puede reintentar. Si SNS recibió el evento y falla el borrado del OUTBOX, el reenvío conserva el event_id.
 - Usuarios usa un pepper versionado en Secrets Manager para nuevas contraseñas cuando corresponde. Las cuentas PBKDF2 existentes y los tokens opacos siguen funcionando. El SDK tiene límites de espera y de intentos, incluidas las invocaciones con efectos entre servicios.
-- Los stacks independientes pasan a compartir el gateway y el autorizador de su ambiente. La fuente del ID es el stack compartido. Se verificó que cada ambiente resuelve nombres distintos de tablas, colas, DLQ, tema, bucket, funciones y secreto.
+- Los stacks independientes pasan a compartir el gateway y el autorizador de su ambiente. Las 47 rutas usan el VPC Link V2 y el ALB HTTPS interno del stack compartido. Se verificó que cada ambiente resuelve nombres distintos de tablas, colas, DLQ, tema, bucket, funciones y secreto.
 
 ## Inventario de funciones
 
