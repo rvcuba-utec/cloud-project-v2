@@ -3,7 +3,7 @@
   "info": {
     "title": "Trazora FSM · MS5 Partes",
     "version": "1.0.0",
-    "description": "API de MS5 Partes. Cada microservicio es su propia API: este documento cubre solo el servicio de partes.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Las listas se paginan con `limit` y `cursor`."
+    "description": "API de MS5 Partes. Cada microservicio es su propia API: este documento cubre solo el servicio de partes.\n\n**Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.\n\nEl tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{\"error\": {\"codigo\", \"mensaje\", \"detalle\"}}`. Los errores emitidos por una Lambda incluyen `error.request_id` para consultar CloudWatch. Las listas se paginan con `limit` y `cursor`."
   },
   "servers": [
     {
@@ -778,6 +778,10 @@
               "detalle": {
                 "type": "object",
                 "additionalProperties": true
+              },
+              "request_id": {
+                "type": "string",
+                "description": "Identificador de la invocación Lambda en CloudWatch."
               }
             }
           }

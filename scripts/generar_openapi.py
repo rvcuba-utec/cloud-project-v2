@@ -48,6 +48,7 @@ FECHA = texto("Fecha AAAA-MM-DD (día local de Lima).", format="date", example="
 SCHEMAS = {
     "Error": objeto({"error": objeto({
         "codigo": texto(example="ENTRADA_INVALIDA"), "mensaje": TEXTO, "detalle": {"type": "object", "additionalProperties": True},
+        "request_id": texto(description="Identificador de la invocación Lambda en CloudWatch."),
     })}),
     "Usuario": objeto({
         "usuario_id": TEXTO, "email": texto(format="email"), "nombre": TEXTO,
@@ -451,7 +452,7 @@ DESCRIPCION = """{titulo}. Cada microservicio es su propia API: este documento c
 
 **Cómo probarlo:** 1) en el servicio *usuarios* ejecuta `POST /auth/login`; 2) copia el `token`; 3) pulsa **Authorize** y pégalo (sin escribir `Bearer`); 4) prueba cualquier endpoint de cualquier servicio: el token vale para todos.
 
-El tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{{"error": {{"codigo", "mensaje", "detalle"}}}}`. Las listas se paginan con `limit` y `cursor`."""
+El tenant y el rol salen del token, nunca del cuerpo ni de la URL. Los errores tienen la forma `{{"error": {{"codigo", "mensaje", "detalle"}}}}`. Los errores emitidos por una Lambda incluyen `error.request_id` para consultar CloudWatch. Las listas se paginan con `limit` y `cursor`."""
 
 
 def rutas_de_serverless(servicio):

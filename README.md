@@ -60,6 +60,10 @@ La carga masiva va **directa a DynamoDB con boto3, nunca por API Gateway ni Lamb
 
 La carga no depende de esta laptop: se puede repetir sin duplicar y reanudar si caduca la sesión, porque los ID solo dependen de la semilla y de la fecha base (guardada en `.local-env/`). Mide primero con `--escala 0.01`.
 
+## Cambios del backend en esta rama
+
+La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. Incluye el gateway por ambiente, los resultados locales de fallos controlados y la preparación de Secrets Manager. Las URLs de la sección de despliegues corresponden a la versión anterior.
+
 ## Documentación
 
 | Tema | Dónde |
