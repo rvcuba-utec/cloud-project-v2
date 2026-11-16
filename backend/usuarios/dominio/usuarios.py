@@ -32,25 +32,25 @@ SK_EMPRESA = "EMPRESA"
 
 
 def normalizar_email(valor):
-    email = str(valor or "").strip().lower()
+    email = valor.strip().lower() if isinstance(valor, str) else ""
     if not _EMAIL.match(email):
         raise entrada_invalida("El correo no es válido")
     return email
 
 
 def normalizar_tenant(valor):
-    return str(valor or "").strip().upper()
+    return valor.strip().upper() if isinstance(valor, str) else ""
 
 
 def validar_rol(rol, tecnico_id):
-    if rol not in ROLES:
+    if not isinstance(rol, str) or rol not in ROLES:
         raise entrada_invalida("Rol no válido")
     if rol == TECNICO and not tecnico_id:
         raise entrada_invalida("Una cuenta de técnico requiere tecnico_id")
 
 
 def validar_estado(estado):
-    if estado not in ESTADOS:
+    if not isinstance(estado, str) or estado not in ESTADOS:
         raise entrada_invalida("Estado no válido")
 
 

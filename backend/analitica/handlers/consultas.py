@@ -1,7 +1,7 @@
 import re
 from datetime import date
 
-from trazora_common import dynamo, interno
+from trazora_common import dynamo, interno, logs
 from trazora_common.auth import ADMIN, COORDINADOR, obtener_contexto, requiere_rol
 from trazora_common.http import api_handler, entrada_invalida, parametro_query, parametro_ruta, respuesta
 
@@ -62,6 +62,7 @@ def ranking(pk, fecha):
     return [metricas_de_tecnico(t, acumulados.get(t), dias.get(t)) for t in sorted({*acumulados, *dias})]
 
 
+@logs.lambda_evento
 def tecnicos_interno(event, context):
     """Sin ruta: la invoca Agenda con lambda.invoke al reasignar por un evento, sin token de usuario."""
     fecha = event["fecha"]

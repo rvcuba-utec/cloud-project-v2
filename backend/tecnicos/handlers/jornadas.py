@@ -106,6 +106,7 @@ def disponibles(event, context):
     return respuesta({"fecha": fecha, "items": candidatos_del_dia(dynamo.tabla(), contexto.pk, fecha, especialidad)})
 
 
+@logs.lambda_evento
 def disponibles_interno(event, context):
     """Sin ruta: la invoca Agenda con lambda.invoke al reasignar visitas por un evento, cuando no
     hay token de usuario que reenviar (como bloquearOrden, H1)."""

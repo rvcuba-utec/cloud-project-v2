@@ -31,7 +31,7 @@ def lambda_handler(event, context):
         cambios["nombre"] = texto(datos, "nombre", LARGO_MAXIMO_NOMBRE)
     if "tecnico_id" in cambios:
         cambios["tecnico_id"] = texto(datos, "tecnico_id", LARGO_MAXIMO_ID)
-    if "rol" in cambios and cambios["rol"] not in ROLES:
+    if "rol" in cambios and (not isinstance(cambios["rol"], str) or cambios["rol"] not in ROLES):
         raise entrada_invalida("Rol no válido")
     if "estado" in cambios:
         validar_estado(cambios["estado"])

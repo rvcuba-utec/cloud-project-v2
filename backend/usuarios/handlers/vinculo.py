@@ -10,7 +10,7 @@ def exigir_tecnico(tenant_id, tecnico_id):
     try:
         existe = interno.invocar(os.environ["TECNICOS_FN"], {"tenant_id": tenant_id, "tecnico_id": tecnico_id})["existe"]
     except Exception as error:
-        logs.error("tecnicos_no_disponible", tenant_id=tenant_id, tipo_error=type(error).__name__)
+        logs.fallo("tecnicos_no_disponible", error, "SERVICIO_NO_DISPONIBLE", tenant_id=tenant_id)
         raise ApiError(503, "SERVICIO_NO_DISPONIBLE", "No se pudo comprobar el técnico. Intenta de nuevo.")
     if not existe:
         raise no_encontrado("Técnico")

@@ -43,7 +43,9 @@ def _aplicar_parte(evento):
             eventos.operacion_inbox(evento["event_id"], evento["tenant_id"]),
             _historial(evento, "PARTE_FINALIZADO", detalle),
         ])
-    except dynamo.TransaccionCancelada:
+    except dynamo.TransaccionCancelada as exc:
+        if not exc.fallo_condicion(0):
+            raise
         logs.info("evento_repetido", tenant_id=evento["tenant_id"], event_id=evento["event_id"])
 
 
@@ -94,9 +96,7 @@ def _aplicar_visita(evento, tabla_ddb):
         raise _OrdenCambio()
 
 
-def lambda_handler(event, context):
-    """Una excepción devuelve el mensaje a la cola; agotados los intentos, pasa a la DLQ."""
-    evento = eventos.leer_mensaje_sqs(event)
+def procesar(evento):
     if evento["event_type"] == "ParteFinalizado":
         _aplicar_parte(evento)
         return
@@ -110,3 +110,6 @@ def lambda_handler(event, context):
         except _OrdenCambio:
             continue
     raise RuntimeError(f"Evento {evento['event_id']}: la orden siguió cambiando")
+
+
+lambda_handler = eventos.consumidor_sqs(procesar)

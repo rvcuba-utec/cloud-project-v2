@@ -44,7 +44,7 @@ def _metricas(tenant, fecha):
         datos = interno.invocar(os.environ["ANALITICA_FN"], {"tenant_id": tenant, "fecha": fecha})
         return {m["tecnico_id"]: m for m in datos["items"]}
     except Exception as error:
-        logs.error("analitica_no_disponible", tenant_id=tenant, tipo_error=type(error).__name__)
+        logs.fallo("analitica_no_disponible", error, "ANALITICA_NO_DISPONIBLE", tenant_id=tenant)
         return {}
 
 

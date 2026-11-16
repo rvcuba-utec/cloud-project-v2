@@ -45,7 +45,7 @@ def lambda_handler(event, context):
     almacenado = (usuario or {}).get("password_hash")
     if not almacenado:
         _gastar_tiempo(password)
-        logs.info("login_rechazado", tenant_id=tenant_id, motivo="sin_credenciales")
+        logs.info("login_rechazado", motivo="sin_credenciales")
         raise _credenciales_invalidas()
     if not seguridad.verificar_password(password, almacenado) or usuario.get("estado") != ACTIVO:
         logs.info("login_rechazado", tenant_id=tenant_id, usuario_id=usuario["usuario_id"])

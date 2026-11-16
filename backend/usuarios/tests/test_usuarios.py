@@ -96,7 +96,7 @@ def test_correo_unico_por_empresa_pero_no_entre_empresas():
 
 
 @pytest.mark.parametrize("campos", [
-    {"email": "malo"}, {"nombre": ""}, {"nombre": 123}, {"nombre": "x" * 201}, {"password": "corta"}, {"rol": "SUPERUSUARIO"},
+    {"email": "malo"}, {"nombre": ""}, {"nombre": 123}, {"nombre": "x" * 201}, {"password": "corta"}, {"rol": "SUPERUSUARIO"}, {"rol": []}, {"rol": {}},
     {"rol": "TECNICO"}, {"rol": "TECNICO", "tecnico_id": 99},
 ])
 def test_alta_valida_entrada(campos):
@@ -330,3 +330,24 @@ def test_filtro_encuentra_cuentas_al_final_de_muchos_perfiles(monkeypatch):
     tabla.put_item(Item={"PK": "TENANT#CLIMALIMA", "SK": "USUARIO#USR-ADMIN", "entity_type": "USUARIO",
                          "usuario_id": "USR-ADMIN", "email": "admin@x.com", "nombre": "Admin", "rol": "ADMIN", "estado": "ACTIVO"})
     assert [u["usuario_id"] for u in listar_con(rol="ADMIN", estado="ACTIVO")["items"]] == ["USR-ADMIN"]
+
+
+def test_alta_con_secreto_y_login_con_token_opaco(monkeypatch):
+    import base64
+    from trazora_common import secretos
+
+    stage = "test"
+    nombre = secretos.nombre(stage)
+    monkeypatch.setenv("STAGE", stage)
+    monkeypatch.setenv("PASSWORD_PEPPER_SECRET", nombre)
+    monkeypatch.setattr(secretos, "_cliente", None)
+    monkeypatch.setattr(secretos, "_cache", {})
+    boto3.client("secretsmanager").create_secret(Name=nombre, SecretString=json.dumps({
+        "activa": "v1", "claves": {"v1": base64.b64encode(bytes(range(32))).decode()}}))
+    usuario = crear_usuario()
+    item = dynamo.tabla().get_item(Key={"PK": "TENANT#CLIMALIMA", "SK": "USUARIO#" + usuario["usuario_id"]})["Item"]
+    assert item["password_hash"].startswith("pbkdf2_sha256_pepper:v1$")
+    sesion = iniciar()
+    assert sesion["statusCode"] == 200
+    assert autorizar(cuerpo(sesion)["token"])["context"]["tenant_id"] == "CLIMALIMA"
+    assert iniciar(tenant="FRIOSUR")["statusCode"] == 401

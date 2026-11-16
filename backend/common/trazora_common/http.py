@@ -1,7 +1,11 @@
 """Entrada y salida de las Lambdas de API (integración proxy de API Gateway)."""
+import base64
+import binascii
 import functools
 import json
 from decimal import Decimal
+
+from botocore.exceptions import BotoCoreError, ClientError
 
 from . import logs
 
@@ -57,20 +61,22 @@ def respuesta(cuerpo=None, status=200):
     }
 
 
-def respuesta_error(error):
-    return respuesta(
-        {"error": {"codigo": error.codigo, "mensaje": error.mensaje, "detalle": error.detalle}},
-        error.status,
-    )
+def respuesta_error(error, request_id=None):
+    cuerpo = {"codigo": error.codigo, "mensaje": error.mensaje, "detalle": error.detalle}
+    if request_id:
+        cuerpo["request_id"] = request_id
+    return respuesta({"error": cuerpo}, error.status)
 
 
 def cuerpo_json(event):
     bruto = event.get("body")
-    if not bruto:
+    if bruto is None or bruto == "":
         return {}
     try:
+        if event.get("isBase64Encoded"):
+            bruto = base64.b64decode(bruto, validate=True).decode("utf-8")
         datos = json.loads(bruto)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, binascii.Error):
         raise entrada_invalida("El cuerpo no es JSON válido")
     if not isinstance(datos, dict):
         raise entrada_invalida("El cuerpo debe ser un objeto JSON")
@@ -114,20 +120,36 @@ def opcion(datos, campo, permitidas):
     return valor
 
 
-def api_handler(funcion):
-    """Convierte excepciones en respuestas uniformes. Nunca registra el evento completo:
-    contiene el token de Authorization."""
+def _error_aws(exc):
+    from .dynamo import TransaccionCancelada
 
+    if isinstance(exc, TransaccionCancelada):
+        return conflicto("CONFLICTO_CONCURRENTE", "El recurso cambió. Actualiza los datos.")
+    if isinstance(exc, ClientError):
+        codigo = exc.response.get("Error", {}).get("Code", "")
+        if codigo == "ConditionalCheckFailedException":
+            return conflicto("CONFLICTO_CONCURRENTE", "El recurso cambió. Actualiza los datos.")
+        if codigo in {"Throttling", "ThrottlingException", "TooManyRequestsException", "ProvisionedThroughputExceededException", "RequestLimitExceeded", "SlowDown"}:
+            return ApiError(503, "DEPENDENCIA_SATURADA", "Servicio ocupado. Intenta de nuevo.")
+        if codigo in {"AccessDenied", "AccessDeniedException", "UnrecognizedClientException", "InvalidClientTokenId", "ExpiredTokenException"}:
+            return ApiError(503, "DEPENDENCIA_NO_DISPONIBLE", "Servicio temporalmente no disponible")
+        return ApiError(502, "ERROR_DEPENDENCIA", "Una dependencia no pudo completar la operación")
+    if isinstance(exc, (BotoCoreError, TimeoutError, ConnectionError)):
+        return ApiError(503, "DEPENDENCIA_NO_DISPONIBLE", "Servicio temporalmente no disponible")
+    return ApiError(500, "ERROR_INTERNO", "Ocurrió un error inesperado")
+
+
+def api_handler(funcion):
     @functools.wraps(funcion)
     def envoltura(event, context):
-        try:
-            return funcion(event, context)
-        except ApiError as error:
-            if error.status >= 500:
-                logs.error("api", codigo=error.codigo, mensaje=error.mensaje)
-            return respuesta_error(error)
-        except Exception as error:  # Última barrera: sin detalles internos hacia el cliente.
-            logs.error("api", tipo_error=type(error).__name__, mensaje=str(error))
-            return respuesta_error(ApiError(500, "ERROR_INTERNO", "Ocurrió un error inesperado"))
-
+        with logs.invocacion(funcion, event, context) as rid:
+            try:
+                return funcion(event, context)
+            except Exception as exc:
+                error = exc if isinstance(exc, ApiError) else _error_aws(exc)
+                operacion = f"{funcion.__module__}.{funcion.__name__}"
+                logs.fallo(operacion, exc, error.codigo, nivel="ERROR" if error.status >= 500 else "WARNING")
+                resultado = respuesta_error(error, rid)
+                resultado["headers"]["X-Request-Id"] = rid
+                return resultado
     return envoltura

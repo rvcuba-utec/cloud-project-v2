@@ -269,7 +269,7 @@ def _evento_visita(orden_id, tipo, version, visita="V1", numero=1, tenant="CLIMA
     evento = eventos.crear_evento(tipo, tenant, "VISITA", visita, version,
                                   {"orden_id": orden_id, "visita_id": visita, "numero_visita_orden": numero, **extra},
                                   event_id=event_id)
-    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+    return {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento)})}]}
 
 
 def _estado(orden_id):
@@ -358,7 +358,7 @@ def test_parte_finalizado_queda_en_el_historial_sin_cambiar_estado():
     orden = nueva()["orden_id"]
     evento = eventos.crear_evento("ParteFinalizado", "CLIMALIMA", "PARTE", "P1", 2,
                                   {"orden_id": orden, "visita_id": "V1", "resultado": "RESUELTO"}, event_id="E9")
-    mensaje = {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+    mensaje = {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento)})}]}
     consumidor.lambda_handler(mensaje, None)
     consumidor.lambda_handler(mensaje, None)
     items = cuerpo(ordenes.historial(peticion(ctx(), ruta={"orden_id": orden}), None))["items"]
@@ -367,12 +367,10 @@ def test_parte_finalizado_queda_en_el_historial_sin_cambiar_estado():
 
 
 def test_mensajes_invalidos_fallan_para_terminar_en_la_dlq():
-    with pytest.raises(Exception):
-        consumidor.lambda_handler({"Records": [{"body": "x"}]}, None)
-    with pytest.raises(ValueError):
-        consumidor.lambda_handler(_evento_visita("NO-EXISTE", "VisitaProgramada", 1), None)
-    with pytest.raises(ValueError):
-        consumidor.lambda_handler(_evento_visita("X", "OtroEvento", 1), None)
+    esperado = {"batchItemFailures": [{"itemIdentifier": "m1"}]}
+    assert consumidor.lambda_handler({"Records": [{"messageId": "m1", "body": "x"}]}, None) == esperado
+    assert consumidor.lambda_handler(_evento_visita("NO-EXISTE", "VisitaProgramada", 1), None) == esperado
+    assert consumidor.lambda_handler(_evento_visita("X", "OtroEvento", 1), None) == esperado
 
 
 # ---- Cancelación en cascada y mapa

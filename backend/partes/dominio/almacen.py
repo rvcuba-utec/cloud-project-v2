@@ -5,6 +5,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
+from trazora_common.sdk import LECTURA
+
 from dominio.partes import (
     CONFIRMADA, MAX_BYTES, PENDIENTE, RECHAZADA, VALIDEZ_FIRMA_SEGUNDOS, archivo_valido, sk_evidencia,
 )
@@ -15,7 +17,7 @@ _s3 = None
 def s3():
     global _s3
     if _s3 is None:
-        _s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
+        _s3 = boto3.client("s3", config=LECTURA.merge(Config(signature_version="s3v4")))
     return _s3
 
 

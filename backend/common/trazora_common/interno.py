@@ -4,6 +4,7 @@ import urllib.error
 import urllib.request
 
 from .http import ApiError
+from .sdk import INVOCACION
 
 TIMEOUT_SEGUNDOS = 8
 
@@ -21,7 +22,10 @@ def llamar(base_url, ruta, token, metodo="GET", cuerpo=None, timeout=TIMEOUT_SEG
     try:
         with urllib.request.urlopen(peticion, timeout=timeout) as respuesta:
             contenido = respuesta.read()
-            return json.loads(contenido) if contenido else None
+            try:
+                return json.loads(contenido) if contenido else None
+            except (ValueError, UnicodeError) as exc:
+                raise ApiError(502, "RESPUESTA_INVALIDA", "Respuesta inválida de un servicio relacionado") from exc
     except urllib.error.HTTPError as error:
         if error.code >= 500:
             raise ApiError(503, "SERVICIO_NO_DISPONIBLE", "Un servicio relacionado no respondió")
@@ -48,7 +52,7 @@ def invocar(nombre_funcion, carga):
 
     global _lambda
     if _lambda is None:
-        _lambda = boto3.client("lambda")
+        _lambda = boto3.client("lambda", config=INVOCACION)
     resultado = _lambda.invoke(FunctionName=nombre_funcion, Payload=json.dumps(carga).encode())
     if resultado.get("FunctionError"):
         raise RuntimeError(f"Falló la función {nombre_funcion}")

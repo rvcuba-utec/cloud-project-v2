@@ -408,7 +408,7 @@ def _parte_finalizado(visita, resultado="RESUELTO", event_id=None, finalizado="2
          "tecnico_id": visita["tecnico_id"], "resultado": resultado, "finalizado_en": finalizado},
         event_id=event_id,
     )
-    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+    return {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento)})}]}
 
 
 def _en_atencion():
@@ -452,19 +452,19 @@ def test_repetido_que_coincide_en_la_transaccion_se_absorbe():
     assert control_de()["visitas_activas"] == 1
 
 
-def test_parte_de_visita_cancelada_registra_el_conflicto_sin_reintentar(capsys):
+def test_parte_incompatible_se_devuelve_a_sqs(capsys):
     visita = nueva()
     visitas.cancelar(peticion(ctx(), ruta={"visita_id": visita["visita_id"]}), None)
-    consumidor.lambda_handler(_parte_finalizado(visita), None)
+    r = consumidor.lambda_handler(_parte_finalizado(visita), None)
+    assert r == {"batchItemFailures": [{"itemIdentifier": "m1"}]}
     assert "conflicto_parte_visita" in capsys.readouterr().out
     assert control_de()["visitas_activas"] == 0
 
 
 def test_mensaje_invalido_falla_para_terminar_en_la_dlq():
-    with pytest.raises(Exception):
-        consumidor.lambda_handler({"Records": [{"body": "no es json"}]}, None)
-    with pytest.raises(ValueError):
-        consumidor.lambda_handler(_parte_finalizado({"visita_id": "NO", "orden_id": "O", "tecnico_id": "T"}), None)
+    esperado = {"batchItemFailures": [{"itemIdentifier": "m1"}]}
+    assert consumidor.lambda_handler({"Records": [{"messageId": "m1", "body": "no es json"}]}, None) == esperado
+    assert consumidor.lambda_handler(_parte_finalizado({"visita_id": "NO", "orden_id": "O", "tecnico_id": "T"}), None) == esperado
 
 
 def test_si_publicar_falla_el_evento_queda_para_el_barrido():
@@ -523,7 +523,7 @@ def test_elegir_reemplazo_fuera_de_jornada_no_sirve():
 def _ausencia(tecnico="T1", fecha="2026-11-10", event_id=None):
     evento = eventos.crear_evento("TecnicoAusente", "CLIMALIMA", "TECNICO", tecnico, 1,
                                   {"tecnico_id": tecnico, "fecha": fecha, "motivo": "Enfermo"}, event_id=event_id)
-    return {"Records": [{"body": json.dumps({"Message": json.dumps(evento)})}]}
+    return {"Records": [{"messageId": "m1", "body": json.dumps({"Message": json.dumps(evento)})}]}
 
 
 @pytest.fixture
@@ -548,7 +548,7 @@ def test_ausencia_reasigna_al_mejor_y_mueve_los_bloques(invocaciones):
     v = nueva(inicio=I10, fin=I11)
     with mock.patch.object(eventos, "publicar") as publicar:
         r = consumidor.lambda_handler(_ausencia(), None)
-    assert r == {"reasignadas": 1, "alertas": 0}
+    assert r == {"batchItemFailures": []}
     actual = _detalle(v["visita_id"])
     assert actual["tecnico_id"] == "T2" and actual["tecnico_nombre"] == "Ana" and actual["reasignada_automaticamente"]
     assert {b.split("#")[2] for b in bloques_guardados()} == {"T2"}
@@ -577,7 +577,7 @@ def test_sin_reemplazo_queda_alerta_y_al_reprogramar_desaparece(invocaciones):
     invocaciones.side_effect = lambda nombre, carga: {"items": []}
     v = nueva(inicio=I10, fin=I11)
     r = consumidor.lambda_handler(_ausencia(), None)
-    assert r == {"reasignadas": 0, "alertas": 1}
+    assert r == {"batchItemFailures": []}
     pendientes = cuerpo(alertas.listar(peticion(ctx()), None))["pendientes"]
     assert [a["visita_id"] for a in pendientes] == [v["visita_id"]]
     actual = _detalle(v["visita_id"])
@@ -603,7 +603,7 @@ def test_mensaje_repetido_no_reasigna_dos_veces(invocaciones):
         r = consumidor.lambda_handler(mensaje, None)
     assert publicar.call_count == 0
     assert len(cuerpo(alertas.listar(peticion(ctx()), None))["recientes"]) == 1
-    assert r["reasignadas"] == 0
+    assert r == {"batchItemFailures": []}
 
 
 def test_analitica_caida_reasigna_igual(invocaciones):
@@ -613,12 +613,12 @@ def test_analitica_caida_reasigna_igual(invocaciones):
         return {"items": CANDIDATOS}
     invocaciones.side_effect = invocar
     v = nueva()
-    assert consumidor.lambda_handler(_ausencia(), None)["reasignadas"] == 1
+    assert consumidor.lambda_handler(_ausencia(), None) == {"batchItemFailures": []}
     assert _detalle(v["visita_id"])["tecnico_id"] == "T2"  # Alfabético: Ana antes que Beto.
 
 
 def test_ausencia_sin_visitas_no_consulta_a_nadie(invocaciones):
-    assert consumidor.lambda_handler(_ausencia(), None) == {"reasignadas": 0, "alertas": 0}
+    assert consumidor.lambda_handler(_ausencia(), None) == {"batchItemFailures": []}
     assert invocaciones.call_count == 0
 
 

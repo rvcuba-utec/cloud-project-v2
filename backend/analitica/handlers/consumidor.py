@@ -24,9 +24,7 @@ def _operacion(pk, sk, cambio, tenant_id, ahora):
     }}
 
 
-def lambda_handler(event, context):
-    """Una excepción devuelve el mensaje a la cola; agotados los intentos, pasa a la DLQ."""
-    evento = eventos.leer_mensaje_sqs(event)
+def procesar(evento):
     tenant = evento["tenant_id"]
     pk = f"TENANT#{tenant}"
     ahora = dynamo.ahora_iso()
@@ -35,5 +33,10 @@ def lambda_handler(event, context):
             eventos.operacion_inbox(evento["event_id"], tenant),
             *[_operacion(pk, sk, cambio, tenant, ahora) for sk, cambio in efectos(evento).items()],
         ])
-    except dynamo.TransaccionCancelada:
+    except dynamo.TransaccionCancelada as exc:
+        if not exc.fallo_condicion(0):
+            raise
         logs.info("evento_repetido", tenant_id=tenant, event_id=evento["event_id"])
+
+
+lambda_handler = eventos.consumidor_sqs(procesar)
