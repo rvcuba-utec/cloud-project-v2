@@ -1,33 +1,32 @@
-# Fragmentos compartidos por los serverless.yml de los microservicios.
+# El stack compartido es dueño del gateway, su autorizador y las rutas comunes.
 cors:
   origin: '*'
   headers: [Content-Type, Authorization, Idempotency-Key]
 
-authorizer:
-  arn: arn:aws:lambda:${aws:region}:${aws:accountId}:function:api-usuarios-${sls:stage}-validarToken
-  type: token
-  identitySource: method.request.header.Authorization
-  resultTtlInSeconds: 60
+apiGateway:
+  restApiId: ${param:restApiId, cf:trazora-shared-${sls:stage}.RestApiId}
+  restApiRootResourceId: ${param:rootId, cf:trazora-shared-${sls:stage}.RootId}
 
-# Particiones que revisa el barrido del outbox.
+rutasVisitas:
+  /visitas: ${param:visitasId, cf:trazora-shared-${sls:stage}.VisitasId}
+  '/visitas/{visita_id}': ${param:visitaId, cf:trazora-shared-${sls:stage}.VisitaId}
+
+authorizer:
+  type: CUSTOM
+  authorizerId: ${param:authorizerId, cf:trazora-shared-${sls:stage}.AuthorizerId}
+
+apiUrl: https://${self:provider.apiGateway.restApiId}.execute-api.${self:provider.region}.amazonaws.com/${sls:stage}
+
+retencionLogs: { dev: 7, test: 7, prod: 14 }
+
 tenants: CLIMALIMA,FRIOSUR,TECNINORTE
 
-# CORS en errores de API Gateway: equivale a las casillas Default 4XX/5XX del taller 12.
-gatewayResponses:
-  Resources:
-    Default4XX:
-      Type: AWS::ApiGateway::GatewayResponse
-      Properties:
-        RestApiId: { Ref: ApiGatewayRestApi }
-        ResponseType: DEFAULT_4XX
-        ResponseParameters:
-          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
-    Default5XX:
-      Type: AWS::ApiGateway::GatewayResponse
-      Properties:
-        RestApiId: { Ref: ApiGatewayRestApi }
-        ResponseType: DEFAULT_5XX
-        ResponseParameters:
-          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
-          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
+origenes:
+  dev: ['${param:origenFrontend}', 'http://localhost:5173']
+  test: ['${param:origenFrontend}', 'http://localhost:5173']
+  prod: ['${param:origenFrontend}']
+
+pepper:
+  dev: ${env:TRAZORA_PEPPER_DEV, ''}
+  test: trazora/test/usuarios/password-pepper
+  prod: trazora/prod/usuarios/password-pepper

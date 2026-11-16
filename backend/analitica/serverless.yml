@@ -7,16 +7,20 @@ custom:
 
 provider:
   name: aws
+  apiGateway: ${file(../serverless.common.yml):apiGateway}
   runtime: python3.12
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  logRetentionInDays: ${file(../serverless.common.yml):retencionLogs.${sls:stage}}
   timeout: 25
   memorySize: 256
   iam:
-    role: arn:aws:iam::${aws:accountId}:role/LabRole
+    role: arn:aws:iam::${param:cuenta, aws:accountId}:role/LabRole
   environment:
+    SERVICE_NAME: analitica
+    STAGE: ${sls:stage}
     TABLE_NAME: ${sls:stage}-t_analitica
-    TOPIC_ARN: ${cf:trazora-shared-${sls:stage}.TopicArn}
+    TOPIC_ARN: ${param:topicArn, cf:trazora-shared-${sls:stage}.TopicArn}
 
 package:
   patterns: ['!tests/**', '!**/__pycache__/**']
@@ -42,11 +46,11 @@ functions:
     events:
       - sqs:
           arn: { "Fn::GetAtt": [ColaAnalitica, Arn] }
+          functionResponseType: ReportBatchItemFailures
           batchSize: 1
           maximumConcurrency: 2   # El mínimo admitido: menos conflictos sobre los contadores del tenant.
 
 resources:
-  - ${file(../serverless.common.yml):gatewayResponses}
   - Resources:
       ColaFallidosAnalitica:
         Type: AWS::SQS::Queue

@@ -3,6 +3,9 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 source scripts/entorno.sh
+export AWS_ACCESS_KEY_ID=testing AWS_SECRET_ACCESS_KEY=testing AWS_SESSION_TOKEN=testing
+export AWS_EC2_METADATA_DISABLED=true AWS_DEFAULT_REGION=us-east-1
+unset AWS_PROFILE STAGE PASSWORD_PEPPER_SECRET
 FALLOS=0
 for d in backend/common backend/usuarios backend/clientes backend/tecnicos backend/analitica backend/ordenes backend/agenda backend/partes scripts/seed; do
   [ -d "$d/tests" ] || continue

@@ -7,7 +7,7 @@ export UV_CACHE_DIR="$LOCAL_ENV/uv-cache"
 export UV_PYTHON_INSTALL_DIR="$LOCAL_ENV/uv-python"
 export AWS_SHARED_CREDENTIALS_FILE="$HOME/.aws/credentials"
 export AWS_CONFIG_FILE="$HOME/.aws/config"
-export PATH="$_RAIZ/.venv/bin:$_RAIZ/node_modules/.bin:$PATH"
+export PATH="$_RAIZ/.venv/bin:$_RAIZ/.venv/Scripts:$_RAIZ/node_modules/.bin:$PATH"
 mkdir -p "$HOME/.aws" "$npm_config_cache"
 chmod 700 "$LOCAL_ENV" "$HOME/.aws"
 if [ ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]; then

@@ -12,6 +12,60 @@ resources:
       Type: AWS::SNS::Topic
       Properties:
         TopicName: ${sls:stage}-fsm-eventos
+    ApiTrazora:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        Name: trazora-${sls:stage}
+        EndpointConfiguration: { Types: [REGIONAL] }
+    Visitas:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        RestApiId: { Ref: ApiTrazora }
+        ParentId: { Fn::GetAtt: [ApiTrazora, RootResourceId] }
+        PathPart: visitas
+    Visita:
+      Type: AWS::ApiGateway::Resource
+      Properties:
+        RestApiId: { Ref: ApiTrazora }
+        ParentId: { Ref: Visitas }
+        PathPart: '{visita_id}'
+    Autorizador:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: trazora-${sls:stage}-sesion
+        RestApiId: { Ref: ApiTrazora }
+        Type: TOKEN
+        IdentitySource: method.request.header.Authorization
+        AuthorizerResultTtlInSeconds: 0
+        AuthorizerUri:
+          Fn::Sub: 'arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:api-usuarios-${sls:stage}-validarToken/invocations'
+    Default4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        RestApiId: { Ref: ApiTrazora }
+        ResponseType: DEFAULT_4XX
+        ResponseParameters: &corsErrores
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
+    Default5XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        RestApiId: { Ref: ApiTrazora }
+        ResponseType: DEFAULT_5XX
+        ResponseParameters: *corsErrores
   Outputs:
     TopicArn:
       Value: { Ref: TemaEventos }
+    RestApiId:
+      Value: { Ref: ApiTrazora }
+    RootId:
+      Value: { Fn::GetAtt: [ApiTrazora, RootResourceId] }
+    VisitasId:
+      Value: { Ref: Visitas }
+    VisitaId:
+      Value: { Ref: Visita }
+    AuthorizerId:
+      Value: { Ref: Autorizador }
+    ApiUrl:
+      Value:
+        Fn::Sub: 'https://${ApiTrazora}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${sls:stage}'
