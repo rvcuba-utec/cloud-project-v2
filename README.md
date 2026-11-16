@@ -48,7 +48,8 @@ Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --sta
 
 ```bash
 ./test.sh                  # backend y frontend, sin AWS
-python scripts/validar_ingreso.py  # empaqueta y comprueba las 47 rutas en dev, test y prod
+python scripts/validar_ingreso.py --salida .local-env/ingreso-verificado  # comprueba las 47 rutas en cada ambiente
+python scripts/probar_recorrido_local.py .local-env/ingreso-verificado  # orden, visita, parte, evidencia y Analítica
 scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
 scripts/pruebas_web.sh     # recorrido completo en un navegador real, instalado dentro del proyecto
 ```

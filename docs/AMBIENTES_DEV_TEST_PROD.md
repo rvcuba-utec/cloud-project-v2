@@ -51,4 +51,12 @@ El autorizador `REQUEST` comprueba el token opaco en cada petición protegida y 
 
 En `config.env`, definir `TRAZORA_ALB_CERT_ARN_<STAGE>` y `TRAZORA_ALB_DOMINIO_<STAGE>` con sufijos `DEV`, `TEST` o `PROD`. El ARN debe ser de un certificado ACM emitido en la región del ALB, con una cadena admitida por API Gateway. El nombre DNS debe estar cubierto por el certificado. El gateway comprueba ese nombre durante TLS y llega al ALB por su ARN. Las pruebas usan un ARN sintético y un dominio `.invalid`.
 
-Los CIDR de dev, test y prod son `10.80.0.0/16`, `10.81.0.0/16` y `10.82.0.0/16`. En Virginia se usan `use1-az1` y `use1-az2`. Para otra región, elegir dos AZ admitidas y definir `TRAZORA_AZ_ID_A` y `TRAZORA_AZ_ID_B` en `config.env` para el stack compartido. Antes de aprovisionar en Academy quedan por comprobar el certificado, los permisos del LabRole y el presupuesto del ALB por ambiente. [Regiones y zonas del VPC Link V2](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-vpc-links-v2.html)
+Los CIDR de dev, test y prod son `10.80.0.0/16`, `10.81.0.0/16` y `10.82.0.0/16`. En Virginia se usan `use1-az1` y `use1-az2`. Para otra región, elegir dos AZ admitidas y definir `TRAZORA_AZ_ID_A` y `TRAZORA_AZ_ID_B` en `config.env` para el stack compartido. [Regiones y zonas del VPC Link V2](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-vpc-links-v2.html)
+
+### Consulta de AWS Academy
+
+El 16 de noviembre de 2026, STS identificó la sesión de Academy como `voclabs`. El stack `trazora-shared-dev` carecía de rol de servicio asignado, por lo que CloudFormation usaría los permisos de la identidad que lo actualice. Las Lambdas del proyecto se configuran con `LabRole`.
+
+En us-east-1, `SimulatePrincipalPolicy` devolvió `allowed` para ambos roles en `apigateway:POST` sobre `/vpclinks` y `elasticloadbalancing:CreateLoadBalancer` con esquema `internal`. También permitió crear el listener HTTPS, las reglas y los grupos de destino, registrar las Lambda y crear el rol vinculado de ELB, que aún faltaba en esa cuenta. Las dos AZ estaban disponibles. La cuota observada fue de 10 VPC Link V2 por región y de 100 reglas y 100 grupos de destino por ALB.
+
+La consulta de ACM devolvió cero certificados en la región. Para una prueba real hace falta un certificado emitido que cubra el dominio del listener y configurar ambos valores en el ambiente elegido. También quedó pendiente autenticar Serverless v4 y comprobar el presupuesto. La consulta fue de solo lectura y la validación del tráfico administrado y de la negociación TLS queda pendiente.
