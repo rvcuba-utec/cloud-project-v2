@@ -20,7 +20,7 @@ desplegar_servicio() {
 
 desplegar_backend() {
   paso "Backend: recursos compartidos"
-  local args=(--stage "$STAGE" --param="certificadoAlb=$CERTIFICADO_ALB" --param="dominioAlb=$DOMINIO_ALB")
+  local args=(--stage "$STAGE")
   if [[ -n "${TRAZORA_AZ_ID_A:-}" ]]; then args+=(--param="azIdA=$TRAZORA_AZ_ID_A" --param="azIdB=$TRAZORA_AZ_ID_B"); fi
   (cd infra/shared && serverless deploy "${args[@]}") || fallo "falló el stack compartido."
   sincronizar_comun
@@ -33,11 +33,6 @@ if [[ "$OBJETIVO" == todo || "$OBJETIVO" == backend ]]; then
     [[ -n "${TRAZORA_AZ_ID_A:-}" && -n "${TRAZORA_AZ_ID_B:-}" && "$TRAZORA_AZ_ID_A" != "$TRAZORA_AZ_ID_B" ]] ||
       fallo "define TRAZORA_AZ_ID_A y TRAZORA_AZ_ID_B con dos AZ distintas que admitan VPC Link V2."
   fi
-  var_cert="TRAZORA_ALB_CERT_ARN_${STAGE^^}"
-  var_dns="TRAZORA_ALB_DOMINIO_${STAGE^^}"
-  CERTIFICADO_ALB="${!var_cert:-}"
-  DOMINIO_ALB="${!var_dns:-}"
-  [[ -n "$CERTIFICADO_ALB" && -n "$DOMINIO_ALB" ]] || fallo "define $var_cert y $var_dns en config.env para el listener HTTPS."
 fi
 
 comprobar_entorno

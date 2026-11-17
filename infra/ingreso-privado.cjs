@@ -86,6 +86,7 @@ function compilarRuta(recursos, naming, red, stage, servicio, entrada, prioridad
       Actions: [{ Type: 'forward', TargetGroupArn: ref(grupo) }],
     },
   };
+  // REST VPC Link V2 routes by ALB ARN. The HTTP URI supplies Host and the request path.
   method.Properties.Integration = {
     Type: 'HTTP_PROXY', IntegrationHttpMethod: metodo, ConnectionType: 'VPC_LINK',
     ConnectionId: red.vpcLinkId, IntegrationTarget: red.albArn, Uri: red.albUrl + '/' + ruta,
@@ -116,7 +117,7 @@ module.exports = class IngresoPrivado {
           throw new Error('Servicio o ambiente desconocido para el listener');
         }
         template.Metadata = { ...template.Metadata, AWSToolsMetrics: { ...template.Metadata?.AWSToolsMetrics, AWSAgentToolkit: 'aws-cloudformation@3' } };
-        template.Description = 'Microservicio ' + nombre + ' de Trazora con ingreso HTTPS privado.';
+        template.Description = 'Microservicio ' + nombre + ' de Trazora con ingreso HTTP privado mediante VPC Link V2.';
         const prioridades = new Set();
         for (const entrada of rutas(service)) {
           compilarRuta(template.Resources, serverless.getProvider('aws').naming, service.custom.ingresoPrivado, stage, nombre, entrada, prioridades);

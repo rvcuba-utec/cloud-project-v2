@@ -60,15 +60,19 @@ def verificar_red(recursos, stage):
     exigir(all(not s["MapPublicIpOnLaunch"] and s["VpcId"] == {"Ref": "VpcIngreso"} for s in subredes.values()), "Subred privada")
     exigir({s["Ref"] for s in alb["Subnets"]} == {s["Ref"] for s in enlace["SubnetIds"]} == set(subredes), "Subredes del enlace y ALB")
     exigir(enlace["Name"] == "trazora-" + stage and alb["Scheme"] == "internal" and alb["Type"] == "application", "ALB interno")
-    exigir(listener["Protocol"] == "HTTPS" and listener["Port"] == 443 and listener["Certificates"] == [{"CertificateArn": {"Ref": "CertificadoAlb"}}], "TLS")
+    exigir(listener["Protocol"] == "HTTP" and listener["Port"] == 80
+           and "Certificates" not in listener and "SslPolicy" not in listener, "ALB privado HTTP sin ACM")
     exigir(listener["DefaultActions"][0]["FixedResponseConfig"]["StatusCode"] == "404", "Respuesta por defecto")
     grupos = propiedades(recursos, "EC2::SecurityGroup")
     sg_link, = enlace["SecurityGroupIds"]
     sg_alb, = alb["SecurityGroups"]
     ingreso, = propiedades(recursos, "EC2::SecurityGroupIngress").values()
     salida, = grupos[sg_link["Ref"]]["SecurityGroupEgress"]
-    exigir(ingreso == {"GroupId": sg_alb, "SourceSecurityGroupId": sg_link, "IpProtocol": "tcp", "FromPort": 443, "ToPort": 443}, "Entrada al ALB")
-    exigir(salida == {"DestinationSecurityGroupId": sg_alb, "IpProtocol": "tcp", "FromPort": 443, "ToPort": 443}, "Salida del enlace")
+    exigir(ingreso == {"GroupId": sg_alb, "SourceSecurityGroupId": sg_link, "IpProtocol": "tcp", "FromPort": 80, "ToPort": 80}, "Entrada al ALB")
+    exigir(salida == {"DestinationSecurityGroupId": sg_alb, "IpProtocol": "tcp", "FromPort": 80, "ToPort": 80}, "Salida del enlace")
+    exigir(grupos[sg_alb["Ref"]]["SecurityGroupEgress"] ==
+           [{"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "127.0.0.1/32"}],
+           "Sin salida del ALB hacia la red")
     exigir(all(not g.get("SecurityGroupIngress") for g in grupos.values()), "Entrada extra en un grupo")
     exigir(not any(propiedades(recursos, t) for t in ("EC2::InternetGateway", "EC2::NatGateway", "EC2::Route")), "Ruta exterior")
     return vpc["CidrBlock"]
@@ -159,7 +163,7 @@ def main():
             cidrs.add(verificar_red(stacks["shared"], stage))
             patrones = [p for n in SERVICIOS for p in verificar_servicio(n, stacks[n], stage)]
             verificar_seleccion(patrones, stage)
-            print(f"{stage}: 8 stacks, 2 AZ, 1 VPC Link V2, 1 ALB HTTPS interno, 47 rutas y targets, 46 protegidas", flush=True)
+            print(f"{stage}: 8 stacks, 2 AZ, 1 VPC Link V2, 1 ALB HTTP interno, 47 rutas y targets, 46 protegidas", flush=True)
     exigir(len(cidrs) == len(ETAPAS), "CIDR repetido entre ambientes")
 
 

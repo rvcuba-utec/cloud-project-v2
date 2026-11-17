@@ -17,8 +17,7 @@ def parametros(stage):
         "cuenta": "000000000000", "restApiId": "api" + stage, "rootId": "raiz" + stage,
         "visitasId": "visitas" + stage, "visitaId": "visita" + stage, "authorizerId": "auth" + stage,
         "topicArn": f"arn:aws:sns:us-east-1:000000000000:{stage}-fsm-eventos",
-        "certificadoAlb": "arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000",
-        "dominioAlb": f"{stage}.alb.example.invalid", "albUrl": f"https://{stage}.alb.example.invalid",
+        "albUrl": f"http://internal-{stage}.elb.amazonaws.com",
         "vpcLinkId": "link" + stage,
         "albArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/{stage}/0000000000000000",
         "listenerArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:listener/app/{stage}/0000000000000000/0000000000000001",
@@ -61,6 +60,8 @@ def verificar(stage, configs):
     datos = parametros(stage)
     compartido = configs["shared"]["resources"]
     recursos = compartido["Resources"]
+    exigir(compartido["Outputs"]["AlbUrl"]["Value"] == {"Fn::Sub": "http://${AlbInterno.DNSName}"},
+           "URL HTTP derivada del DNS del ALB")
     exigir(sum(r["Type"] == "AWS::ApiGateway::RestApi" for r in recursos.values()) == 1, "Gateway compartido")
     exigir(recursos["ApiTrazora"]["Properties"]["Name"] == "trazora-" + stage, "Nombre de gateway")
     exigir(recursos["TemaEventos"]["Properties"]["TopicName"] == stage + "-fsm-eventos", "Nombre SNS")
