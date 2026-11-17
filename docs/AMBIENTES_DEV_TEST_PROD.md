@@ -31,7 +31,7 @@ Para ensayar la migración en una operación futura, usar test vacío, resolver 
 
 ## Ingreso privado de las 47 rutas
 
-`trazora-shared-<stage>` crea una VPC aislada, dos subredes privadas en AZ distintas, un VPC Link V2, un ALB interno y su listener HTTPS. El grupo de seguridad del enlace solo permite TCP 443 hacia el grupo del ALB. Las subredes usan la ruta local de la VPC. El ALB invoca las funciones mediante el servicio Lambda. Los handlers siguen accediendo a DynamoDB, S3, SNS y SQS con el modelo previo.
+`trazora-shared-<stage>` crea una VPC aislada, dos subredes privadas en AZ distintas, un VPC Link V2 y un ALB interno con listener HTTP en el puerto 80. El grupo de seguridad del enlace solo permite TCP 80 hacia el grupo del ALB. Las subredes usan la ruta local de la VPC. El ALB invoca las funciones mediante el servicio Lambda. Los handlers siguen accediendo a DynamoDB, S3, SNS y SQS con el modelo previo.
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ flowchart LR
     API -->|Petición protegida| Auth[Autorizador de Usuarios]
     Auth -->|Sesión e identidad| API
     API --> Link[VPC Link V2]
-    Link -->|HTTPS 443| ALB[ALB interno en dos AZ]
+    Link -->|HTTP 80, red privada| ALB[ALB interno en dos AZ]
     ALB -->|Método y ruta| Lambda[Lambda de la operación]
 ```
 
@@ -47,11 +47,19 @@ Cada declaración `http` de Serverless produce una integración REST `HTTP_PROXY
 
 El autorizador `REQUEST` comprueba el token opaco en cada petición protegida y rechaza cabeceras internas aportadas por el cliente. Gateway obtiene `X-Trazora-Identity` exclusivamente de `context.authorizer.identidadAlb`. La cabecera transporta en base64 los cuatro campos validados por MS0. La confianza procede del autorizador, del mapeo y del acceso restringido al listener. El adaptador comprueba la identidad y reconstruye los parámetros, los encabezados y la respuesta multivalor que necesita el ALB. Login ignora la identidad entrante. El límite del target Lambda es 1 MB para el cuerpo de la solicitud y 1 MB para el JSON de respuesta. Los archivos de evidencia siguen viajando entre el navegador y S3 con URLs firmadas. [Eventos, respuestas y límites de Lambda con ALB](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/lambda-functions.html)
 
-### Configuración del listener para un despliegue futuro
+### Despliegue sin ACM en AWS Academy
 
-En `config.env`, definir `TRAZORA_ALB_CERT_ARN_<STAGE>` y `TRAZORA_ALB_DOMINIO_<STAGE>` con sufijos `DEV`, `TEST` o `PROD`. El ARN debe ser de un certificado ACM emitido en la región del ALB, con una cadena admitida por API Gateway. El nombre DNS debe estar cubierto por el certificado. El gateway comprueba ese nombre durante TLS y llega al ALB por su ARN. Las pruebas usan un ARN sintético y un dominio `.invalid`.
+API Gateway conserva su endpoint público HTTPS `execute-api` con TLS administrado por AWS. El VPC Link V2 entra por **HTTP/80** al **ALB interno** y restringe el acceso por Security Groups a la comunicación entre el enlace y el balanceador; no hace falta un dominio propio ni un certificado de ACM. `AlbUrl` se construye desde el DNS del ALB que entrega CloudFormation, sin ningún dominio ficticio.
+
+**Límite de seguridad:** esta variante no cifra con TLS el tramo privado API Gateway → ALB. El aislamiento de red no equivale a cifrado. Está diseñada como vía de despliegue académico en AWS Academy y requiere una revisión de riesgos antes de utilizarla con credenciales, información sensible o tráfico de producción real. Si se necesita TLS de extremo a extremo, deberá volver a configurarse un listener HTTPS con un certificado válido y un nombre DNS verificado, en otro cambio controlado.
 
 Los CIDR de dev, test y prod son `10.80.0.0/16`, `10.81.0.0/16` y `10.82.0.0/16`. En Virginia se usan `use1-az1` y `use1-az2`. Para otra región, elegir dos AZ admitidas y definir `TRAZORA_AZ_ID_A` y `TRAZORA_AZ_ID_B` en `config.env` para el stack compartido. [Regiones y zonas del VPC Link V2](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-vpc-links-v2.html)
+
+### Prueba en AWS Academy previa a una migración
+
+1. Con la sesión temporal de Learner Lab en `us-east-1`, confirmar la identidad con `aws sts get-caller-identity`. Inventariar stacks, APIs, enlaces, ALB y las dos AZ. Comprobar los permisos efectivos de la sesión y de `LabRole`, la concurrencia de Lambda, las cuotas de red y el presupuesto restante.
+2. Confirmar que `test` sea un ambiente de prueba aislado y usar datos sintéticos. Preparar y revisar Change Sets sin ejecutarlos. Empezar por shared y continuar con Usuarios y los otros servicios a medida que estén disponibles las salidas reales de las dependencias. Detenerse ante eliminaciones, reemplazos de recursos con estado o cambios de propietario. Si ya existe un listener en 443, coordinar la actualización de shared y de los métodos REST. Un cambio de puerto y de URI en stacks distintos puede interrumpir la API mientras se completa la transición.
+3. Tras aprobar el despliegue y revisar los cambios, publicar secuencialmente el stack compartido y los siete servicios en `test` según el orden de `deploy.sh`. Comprobar el estado del enlace, el listener HTTP/80 y los grupos de seguridad. Usar la URL HTTPS de `execute-api` para verificar login, 401 sin sesión, aislamiento entre empresas, métodos con parámetros, Analítica y procesamiento asíncrono. Ensayar el frontend de test después de verificar el backend.
 
 ### Consulta de AWS Academy
 
@@ -59,4 +67,4 @@ El 16 de noviembre de 2026, STS identificó la sesión de Academy como `voclabs`
 
 En us-east-1, `SimulatePrincipalPolicy` devolvió `allowed` para ambos roles en `apigateway:POST` sobre `/vpclinks` y `elasticloadbalancing:CreateLoadBalancer` con esquema `internal`. También permitió crear el listener HTTPS, las reglas y los grupos de destino, registrar las Lambda y crear el rol vinculado de ELB, que aún faltaba en esa cuenta. Las dos AZ estaban disponibles. La cuota observada fue de 10 VPC Link V2 por región y de 100 reglas y 100 grupos de destino por ALB.
 
-La consulta de ACM devolvió cero certificados en la región. Para una prueba real hace falta un certificado emitido que cubra el dominio del listener y configurar ambos valores en el ambiente elegido. También quedó pendiente autenticar Serverless v4 y comprobar el presupuesto. La consulta fue de solo lectura y la validación del tráfico administrado y de la negociación TLS queda pendiente.
+La consulta de ACM devolvió cero certificados en la región. **Esta falta ya no bloquea el despliegue del diseño HTTP privado.** Aún deben comprobarse los permisos efectivos para VPC Link V2, ELB, CloudFormation, los límites y el presupuesto, autenticar Serverless v4 y verificar el flujo administrado. La simulación anterior de HTTPS fue solo una comprobación de permisos; no constituye un despliegue de este diseño.

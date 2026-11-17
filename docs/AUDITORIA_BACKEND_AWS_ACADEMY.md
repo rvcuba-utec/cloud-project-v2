@@ -20,7 +20,7 @@ La referencia de partida es `rvcuba-utec/cloud-project-v2@7817304`. El paquete a
 - Los tres consumidores solo procesaban el primer registro. Ahora devuelven los identificadores SQS fallidos mediante `ReportBatchItemFailures`. Un mensaje incompatible sigue el redrive de la cola. Un mensaje ya aplicado se reconoce por su INBOX transaccional. En Agenda se valida también que orden y técnico correspondan a la visita y que el contador no se vuelva negativo.
 - Al caer SNS, un cambio ya confirmado queda en la tabla con su OUTBOX. Si el barrido tampoco puede publicarlo, la invocación programada falla y EventBridge puede reintentar. Si SNS recibió el evento y falla el borrado del OUTBOX, el reenvío conserva el event_id.
 - Usuarios usa un pepper versionado en Secrets Manager para nuevas contraseñas cuando corresponde. Las cuentas PBKDF2 existentes y los tokens opacos siguen funcionando. El SDK tiene límites de espera y de intentos, incluidas las invocaciones con efectos entre servicios.
-- Los stacks independientes pasan a compartir el gateway y el autorizador de su ambiente. Las 47 rutas usan el VPC Link V2 y el ALB HTTPS interno del stack compartido. Se verificó que cada ambiente resuelve nombres distintos de tablas, colas, DLQ, tema, bucket, funciones y secreto.
+- Los stacks independientes pasan a compartir el gateway y el autorizador de su ambiente. Las 47 rutas usan el VPC Link V2 y el ALB HTTP interno (sin ACM; el cliente entra por HTTPS a API Gateway) del stack compartido. Se verificó que cada ambiente resuelve nombres distintos de tablas, colas, DLQ, tema, bucket, funciones y secreto.
 
 ## Inventario de funciones
 
