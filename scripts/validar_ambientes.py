@@ -17,10 +17,6 @@ def parametros(stage):
         "cuenta": "000000000000", "restApiId": "api" + stage, "rootId": "raiz" + stage,
         "visitasId": "visitas" + stage, "visitaId": "visita" + stage, "authorizerId": "auth" + stage,
         "topicArn": f"arn:aws:sns:us-east-1:000000000000:{stage}-fsm-eventos",
-        "albUrl": f"http://internal-{stage}.elb.amazonaws.com",
-        "vpcLinkId": "link" + stage,
-        "albArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/{stage}/0000000000000000",
-        "listenerArn": f"arn:aws:elasticloadbalancing:us-east-1:000000000000:listener/app/{stage}/0000000000000000/0000000000000001",
         "origenFrontend": f"https://{stage}.example.invalid",
     }
 
@@ -60,8 +56,8 @@ def verificar(stage, configs):
     datos = parametros(stage)
     compartido = configs["shared"]["resources"]
     recursos = compartido["Resources"]
-    exigir(compartido["Outputs"]["AlbUrl"]["Value"] == {"Fn::Sub": "http://${AlbInterno.DNSName}"},
-           "URL HTTP derivada del DNS del ALB")
+    privados = {"AWS::EC2::VPC", "AWS::ApiGatewayV2::VpcLink", "AWS::ElasticLoadBalancingV2::LoadBalancer"}
+    exigir(not privados.intersection(r["Type"] for r in recursos.values()), "El gateway llama directo a Lambda: sin VPC, VPC Link ni ALB")
     exigir(sum(r["Type"] == "AWS::ApiGateway::RestApi" for r in recursos.values()) == 1, "Gateway compartido")
     exigir(recursos["ApiTrazora"]["Properties"]["Name"] == "trazora-" + stage, "Nombre de gateway")
     exigir(recursos["TemaEventos"]["Properties"]["TopicName"] == stage + "-fsm-eventos", "Nombre SNS")
