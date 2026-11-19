@@ -1,11 +1,7 @@
 org: ${env:SLS_ORG}
 service: api-clientes
 
-plugins:
-  - ../../infra/ingreso-privado.cjs
-
 custom:
-  ingresoPrivado: ${file(../serverless.common.yml):ingresoPrivado}
   cors: ${file(../serverless.common.yml):cors}
   authorizer: ${file(../serverless.common.yml):authorizer}
 

@@ -1,103 +1,16 @@
 org: ${env:SLS_ORG}
 service: trazora-shared
 
-custom:
-  cidr: { dev: 10.80.0.0/16, test: 10.81.0.0/16, prod: 10.82.0.0/16 }
-
 provider:
   name: aws
   region: ${env:AWS_REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
 
 resources:
-  Description: Entrada REST privada y mensajería compartida del ambiente Trazora.
+  Description: API Gateway REST único y mensajería compartida del ambiente Trazora.
   Metadata:
     AWSToolsMetrics: { AWSAgentToolkit: aws-cloudformation@3 }
   Resources:
-    VpcIngreso:
-      Type: AWS::EC2::VPC
-      Metadata:
-        com.aws.cloudformation.Context: { why: Ingreso privado por ambiente, must: Conservar las dos subredes aisladas }
-      Properties:
-        CidrBlock: ${self:custom.cidr.${sls:stage}}
-        EnableDnsSupport: true
-        EnableDnsHostnames: true
-        Tags: [{ Key: Name, Value: 'trazora-${sls:stage}' }]
-    SubredA:
-      Type: AWS::EC2::Subnet
-      Properties:
-        VpcId: { Ref: VpcIngreso }
-        AvailabilityZoneId: ${param:azIdA, 'use1-az1'}
-        CidrBlock: { Fn::Select: [0, { Fn::Cidr: [{ Fn::GetAtt: [VpcIngreso, CidrBlock] }, 2, 8] }] }
-        MapPublicIpOnLaunch: false
-    SubredB:
-      Type: AWS::EC2::Subnet
-      Properties:
-        VpcId: { Ref: VpcIngreso }
-        AvailabilityZoneId: ${param:azIdB, 'use1-az2'}
-        CidrBlock: { Fn::Select: [1, { Fn::Cidr: [{ Fn::GetAtt: [VpcIngreso, CidrBlock] }, 2, 8] }] }
-        MapPublicIpOnLaunch: false
-    GrupoAlb:
-      Type: AWS::EC2::SecurityGroup
-      Metadata:
-        com.aws.cloudformation.Context: { why: El ALB invoca Lambda como servicio, must: Solo el enlace puede abrir conexiones entrantes }
-      Properties:
-        GroupDescription: ALB interno para targets Lambda
-        VpcId: { Ref: VpcIngreso }
-        # Una regla explícita evita la salida abierta que EC2 asigna por defecto.
-        SecurityGroupEgress: [{ IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 127.0.0.1/32 }]
-    GrupoEnlace:
-      Type: AWS::EC2::SecurityGroup
-      Metadata:
-        com.aws.cloudformation.Context: { why: ENI de API Gateway, must: Permitir salida solo al ALB por HTTP privado }
-      Properties:
-        # GroupDescription is immutable in CloudFormation. Keep it to avoid replacing the group and VPC Link.
-        GroupDescription: VPC Link a ALB por HTTPS
-        VpcId: { Ref: VpcIngreso }
-        SecurityGroupEgress:
-          - { IpProtocol: tcp, FromPort: 80, ToPort: 80, DestinationSecurityGroupId: { Ref: GrupoAlb } }
-    EntradaAlb:
-      Type: AWS::EC2::SecurityGroupIngress
-      Properties:
-        GroupId: { Ref: GrupoAlb }
-        SourceSecurityGroupId: { Ref: GrupoEnlace }
-        IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-    EnlacePrivado:
-      Type: AWS::ApiGatewayV2::VpcLink
-      Metadata:
-        com.aws.cloudformation.Context: { why: Conecta el API REST al ALB, must: Usar subredes y grupo del mismo ambiente }
-      Properties:
-        Name: trazora-${sls:stage}
-        SubnetIds: &subredes [{ Ref: SubredA }, { Ref: SubredB }]
-        SecurityGroupIds: [{ Ref: GrupoEnlace }]
-    AlbInterno:
-      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-      Metadata:
-        com.aws.cloudformation.Context: { why: Distribuye las rutas a targets Lambda, must: Mantener el esquema internal }
-      Properties:
-        Type: application
-        Scheme: internal
-        Subnets: *subredes
-        SecurityGroups: [{ Ref: GrupoAlb }]
-        LoadBalancerAttributes:
-          - { Key: routing.http.drop_invalid_header_fields.enabled, Value: 'true' }
-          - { Key: routing.http.desync_mitigation_mode, Value: strictest }
-    ListenerPrivado:
-      Type: AWS::ElasticLoadBalancingV2::Listener
-      Metadata:
-        com.aws.cloudformation.Context: { why: Enlace privado HTTP; HTTPS termina en API Gateway, must: Mantener ALB interno y restringido al VPC Link }
-      Properties:
-        LoadBalancerArn: { Ref: AlbInterno }
-        Protocol: HTTP
-        Port: 80
-        DefaultActions:
-          - Type: fixed-response
-            FixedResponseConfig:
-              StatusCode: '404'
-              ContentType: application/json
-              MessageBody: '{"error":{"codigo":"NO_ENCONTRADO","mensaje":"Ruta no encontrada","detalle":{}}}'
     TemaEventos:
       Type: AWS::SNS::Topic
       Properties:
@@ -121,7 +34,7 @@ resources:
         PathPart: '{visita_id}'
     Autorizador:
       Metadata:
-        com.aws.cloudformation.Context: { why: Valida la sesión antes del enlace privado, must: Revisar las cabeceras de cada petición con TTL cero }
+        com.aws.cloudformation.Context: { why: Valida la sesión antes de invocar cada Lambda, must: Revisar cada petición con TTL cero }
       Type: AWS::ApiGateway::Authorizer
       Properties:
         Name: trazora-${sls:stage}-sesion
@@ -146,14 +59,6 @@ resources:
         ResponseType: DEFAULT_5XX
         ResponseParameters: *corsErrores
   Outputs:
-    VpcLinkId:
-      Value: { Ref: EnlacePrivado }
-    AlbArn:
-      Value: { Ref: AlbInterno }
-    ListenerArn:
-      Value: { Ref: ListenerPrivado }
-    AlbUrl:
-      Value: { Fn::Sub: 'http://${AlbInterno.DNSName}' }
     TopicArn:
       Value: { Ref: TemaEventos }
     RestApiId:

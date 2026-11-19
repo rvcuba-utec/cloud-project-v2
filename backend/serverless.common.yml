@@ -7,12 +7,6 @@ apiGateway:
   restApiId: ${param:restApiId, cf:trazora-shared-${sls:stage}.RestApiId}
   restApiRootResourceId: ${param:rootId, cf:trazora-shared-${sls:stage}.RootId}
 
-ingresoPrivado:
-  vpcLinkId: ${param:vpcLinkId, cf:trazora-shared-${sls:stage}.VpcLinkId}
-  albArn: ${param:albArn, cf:trazora-shared-${sls:stage}.AlbArn}
-  listenerArn: ${param:listenerArn, cf:trazora-shared-${sls:stage}.ListenerArn}
-  albUrl: ${param:albUrl, cf:trazora-shared-${sls:stage}.AlbUrl}
-
 rutasVisitas:
   /visitas: ${param:visitasId, cf:trazora-shared-${sls:stage}.VisitasId}
   '/visitas/{visita_id}': ${param:visitaId, cf:trazora-shared-${sls:stage}.VisitaId}
