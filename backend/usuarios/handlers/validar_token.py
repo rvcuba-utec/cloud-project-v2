@@ -2,7 +2,7 @@
 import os
 import time
 
-from trazora_common import alb, dynamo, logs, seguridad
+from trazora_common import dynamo, logs, seguridad
 
 from dominio.usuarios import ACTIVO, pk, sk_usuario
 
@@ -21,13 +21,25 @@ def _politica(method_arn, contexto):
                 "Resource": f"{api_y_stage}/*/*",
             }],
         },
-        "context": {**contexto, "identidadAlb": alb.codificar_identidad(contexto)},
+        "context": contexto,
     }
+
+
+def _token(event):
+    """Token del encabezado Authorization. Admite autorizadores REQUEST y TOKEN."""
+    if event.get("type") != "REQUEST":
+        return event.get("authorizationToken", "")
+    valores = [v for k, vs in (event.get("multiValueHeaders") or {}).items()
+               if k.lower() == "authorization" for v in vs]
+    if not valores:
+        valores = [v for k, v in (event.get("headers") or {}).items() if k.lower() == "authorization"]
+    # Un encabezado repetido es ambiguo: se rechaza en vez de elegir uno.
+    return valores[0] if len(valores) == 1 and "," not in valores[0] else ""
 
 
 @logs.lambda_evento
 def lambda_handler(event, context):
-    token = alb.token_autorizador(event)
+    token = _token(event)
     if token.startswith("Bearer "):
         token = token[7:]
     if not token:

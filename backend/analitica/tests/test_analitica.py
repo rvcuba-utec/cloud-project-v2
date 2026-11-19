@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 from moto import mock_aws
 
-from apoyo_pruebas import crear_tabla, ctx, cuerpo, entorno_aws, evento_alb, peticion
-from trazora_common import alb, dynamo, eventos
+from apoyo_pruebas import crear_tabla, ctx, cuerpo, entorno_aws, peticion
+from trazora_common import dynamo, eventos
 
 from dominio import analitica as dom
 from handlers import consultas, consumidor
@@ -49,25 +49,19 @@ def mes(periodo="2026-11", tenant="CLIMALIMA"):
     return cuerpo(consultas.dashboard(peticion(ctx(tenant), query={"periodo": periodo}), None))
 
 
-def test_dashboard_y_detalle_mediante_alb(monkeypatch):
+def test_dashboard_y_detalle_por_api_gateway():
     aplicar(programada(tecnico="TEC-1"))
     aplicar(programada(tecnico="TEC-2", tenant="FRIOSUR"))
-    monkeypatch.setenv("STAGE", "test")
-    monkeypatch.setenv("ALB_RUTA", "GET /analitica/dashboard")
-    identidad = alb.codificar_identidad(ctx())
-    panel = evento_alb("GET", "/test/analitica/dashboard", identidad,
-                       query={"periodo": ["2026-11"], "tenant_id": ["FRIOSUR"]})
+    panel = peticion(ctx(), query={"periodo": "2026-11", "tenant_id": "FRIOSUR"})
     r = consultas.dashboard(panel, None)
     assert r["statusCode"] == 200 and cuerpo(r)["visitas_programadas"] == 1
 
-    panel["multiValueHeaders"][alb.IDENTIDAD] = [alb.codificar_identidad(ctx(rol="TECNICO"))]
-    assert consultas.dashboard(panel, None)["statusCode"] == 403
-    monkeypatch.setenv("ALB_RUTA", "GET /analitica/tecnicos/{tecnico_id}")
-    detalle = evento_alb("GET", "/test/analitica/tecnicos/TEC-1", identidad, query={"fecha": [FECHA]})
+    assert consultas.dashboard(peticion(ctx(rol="TECNICO"), query={"periodo": "2026-11"}), None)["statusCode"] == 403
+    detalle = peticion(ctx(), ruta={"tecnico_id": "TEC-1"}, query={"fecha": FECHA})
     assert cuerpo(consultas.tecnico(detalle, None))["carga_dia"] == 1
-    detalle["path"] = "/test/analitica/tecnicos/TEC-2"
+    detalle["pathParameters"] = {"tecnico_id": "TEC-2"}
     assert cuerpo(consultas.tecnico(detalle, None))["carga_dia"] == 0
-    detalle["multiValueQueryStringParameters"] = {"fecha": ["inválida"]}
+    detalle["queryStringParameters"] = {"fecha": "inválida"}
     assert consultas.tecnico(detalle, None)["statusCode"] == 400
 
 

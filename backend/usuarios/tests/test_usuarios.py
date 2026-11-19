@@ -5,8 +5,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from apoyo_pruebas import evento_alb
-from trazora_common import alb, dynamo, interno, seguridad
+from trazora_common import dynamo, interno, seguridad
 
 from handlers import actualizar, crear, listar, login, validar_token, yo
 
@@ -153,27 +152,25 @@ def test_autorizador_rechaza_tokens_invalidos(token):
         autorizar(token)
 
 
-def test_login_autorizador_y_perfil_por_alb(monkeypatch):
+def test_login_autorizador_y_perfil_por_api_gateway(monkeypatch):
     usuario = crear_usuario()
     monkeypatch.setenv("STAGE", "dev")
-    monkeypatch.setenv("ALB_RUTA", "POST /auth/login")
-    sesion = login.lambda_handler(evento_alb("POST", "/dev/auth/login", body={
+    sesion = login.lambda_handler(peticion(body={
         "tenant_id": "CLIMALIMA", "email": "ana@ejemplo.com", "password": "secreto-123",
     }), None)
     assert sesion["statusCode"] == 200
     bearer = "Bearer " + cuerpo(sesion)["token"]
     request = {"type": "REQUEST", "methodArn": ARN, "headers": {"authorization": bearer}}
-    identidad = validar_token.lambda_handler(request, None)["context"]["identidadAlb"]
-    monkeypatch.setenv("ALB_RUTA", "GET /usuarios/me")
-    perfil = yo.lambda_handler(evento_alb("GET", "/dev/usuarios/me", identidad,
-                              headers={"Authorization": [bearer], "X-Tenant-Id": ["FRIOSUR"]}), None)
+    contexto = validar_token.lambda_handler(request, None)["context"]
+    assert set(contexto) == {"usuario_id", "tenant_id", "rol", "tecnico_id"}
+    assert contexto["usuario_id"] == usuario["usuario_id"] and contexto["tenant_id"] == "CLIMALIMA"
+    perfil = yo.lambda_handler(peticion(contexto), None)
     assert perfil["statusCode"] == 200 and cuerpo(perfil)["usuario_id"] == usuario["usuario_id"]
     assert cuerpo(perfil)["tenant_id"] == "CLIMALIMA"
-    for interna in (alb.IDENTIDAD, "X-TrAzOrA-IdEnTiTy", "X-Amzn-Remapped-X-Trazora-Identity", alb.SOLICITUD):
-        with pytest.raises(Exception, match="^Unauthorized$"):
-            validar_token.lambda_handler({**request, "headers": {"Authorization": bearer, interna: "cliente"}}, None)
     with pytest.raises(Exception, match="^Unauthorized$"):
         validar_token.lambda_handler({**request, "multiValueHeaders": {"authorization": [bearer, bearer]}}, None)
+    with pytest.raises(Exception, match="^Unauthorized$"):
+        validar_token.lambda_handler({**request, "headers": {"authorization": bearer + ",otro"}}, None)
 
 
 def test_autorizador_rechaza_sesion_vencida():
