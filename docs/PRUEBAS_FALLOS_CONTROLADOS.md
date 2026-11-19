@@ -62,34 +62,6 @@ prod: 1 API, 47 rutas, 60 Lambda, 8 tablas, 3 colas + 3 DLQ, 4 barridos
 
 Además se ejecutó `serverless package --stage test` en copias locales del stack compartido y los siete servicios, con los mismos parámetros ficticios. Se inspeccionaron los ZIP, las integraciones y mappings del CloudFormation compilado. Solo shared crea el gateway. Cada método de negocio usa el gateway de test y cada mapping SQS declara `ReportBatchItemFailures`.
 
-## Verificación del VPC Link V2 y del ALB
-
-`scripts/validar_ingreso.py` empaqueta ocho stacks por ambiente en un directorio temporal. Compara las rutas con los siete documentos OpenAPI y evalúa las reglas por prioridad para cada verbo y ruta, con y sin el prefijo del stage. Comprueba el listener, las subredes, los permisos Lambda, el mapeo de la identidad y el adaptador presente en cada ZIP. La validación de CloudFormation usa los esquemas locales de us-east-1.
-
-```bash
-python scripts/validar_ingreso.py --cli .local-env/sls3/node_modules/serverless/scripts/serverless.js --salida .local-env/ingreso-verificado
-cfn-lint -r us-east-1 -t .local-env/ingreso-verificado/*.json
-```
-
-Después del cambio pasaron 477 pruebas Python y 20 de frontend. Los tres ambientes produjeron 47 reglas y 47 grupos de destino por ALB. Cada uno protege 46 rutas y permite el login público. cfn-lint 1.60.1 validó las 24 plantillas. Las pruebas con Moto ejecutan login, el autorizador, el perfil y las consultas de Analítica usando eventos ALB. Cubren el aislamiento de dos empresas, el rechazo de cabeceras reservadas, los permisos por rol, CORS y los parámetros de ruta y consulta. Una comprobación HTTP en loopback usó las reglas empaquetadas de dev y los handlers reales. Tras el login, el panel devolvió 3 visitas para CLIMALIMA y 7 para FRIOSUR. Una cabecera de identidad enviada por el cliente devolvió 401. La simulación de permisos en Academy y el inventario de certificados figuran en la [guía de ambientes](AMBIENTES_DEV_TEST_PROD.md#consulta-de-aws-academy). El tráfico administrado y la negociación TLS quedan por comprobar.
-
-## Recorrido de los siete servicios en local
-
-El recorrido utiliza las plantillas generadas con `validar_ingreso.py --salida .local-env/ingreso-verificado`.
-
-```bash
-python scripts/probar_recorrido_local.py .local-env/ingreso-verificado
-```
-
-Se ejecutan los handlers del repositorio con las reglas del listener, las funciones de destino y los filtros SNS de las plantillas de dev. Moto emula DynamoDB, S3, SNS y SQS en memoria. La prueba entrega el evento ObjectCreated y los mensajes de las colas a las funciones configuradas. Las cuentas de prueba se generan en un directorio temporal y el proceso bloquea las conexiones de red.
-
-El coordinador de CLIMALIMA creó un cliente, una ubicación, una orden y una visita. El técnico inició la visita, subió y leyó una foto mediante las firmas del servicio y finalizó el parte. Los eventos actualizaron la visita, el historial y el estado de la orden. Tras el cierre, Analítica mostró una visita completada y una orden cerrada. FRIOSUR recibió 404 al consultar la orden ajena y sus dos métricas siguieron en cero. Para una segunda orden, una ausencia reasignó dos visitas a un suplente. La cancelación posterior de la orden canceló ambas visitas.
-
-```text
-Recorrido local OK. Evidencia confirmada, visita finalizada, orden cerrada y métricas aisladas por empresa.
-Ausencia y cancelación OK. Dos visitas reasignadas al suplente y después canceladas.
-```
-
 ## Respuesta y log simulados de Analítica
 
 Los siguientes valores proceden de invocar el handler real con un cliente DynamoDB simulado. `req-analitica-01` es el ID de esta prueba local.

@@ -48,8 +48,7 @@ Para la demo, los comandos llevan `--stage prod`, por ejemplo `./warmup.sh --sta
 
 ```bash
 ./test.sh                  # backend y frontend, sin AWS
-python scripts/validar_ingreso.py --salida .local-env/ingreso-verificado  # comprueba las 47 rutas en cada ambiente
-python scripts/probar_recorrido_local.py .local-env/ingreso-verificado  # orden, visita, parte, evidencia y Analítica
+python scripts/validar_ambientes.py  # resuelve los stacks de dev, test y prod sin consultar AWS (requiere login de Serverless)
 scripts/pruebas_aws.sh     # contra AWS; crea algunos datos de prueba
 scripts/pruebas_web.sh     # recorrido completo en un navegador real, instalado dentro del proyecto
 ```
@@ -64,9 +63,9 @@ La carga no depende de esta laptop: se puede repetir sin duplicar y reanudar si 
 
 ## Cambios del backend en esta rama
 
-La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. El gateway REST de cada ambiente usa VPC Link V2 y un ALB interno con 47 destinos Lambda, incluidos los de Analítica. La [guía de ambientes](docs/AMBIENTES_DEV_TEST_PROD.md) describe las rutas y la configuración del listener privado. Las URLs de la sección de despliegues corresponden a la versión anterior.
+La [auditoría de los siete servicios](docs/AUDITORIA_BACKEND_AWS_ACADEMY.md) compara el laboratorio consultado con la configuración de la rama. Cada ambiente tiene **un solo API Gateway REST**, creado por el stack compartido, al que se conectan directamente las Lambdas de los siete microservicios (sin VPC, VPC Link ni ALB). La [guía de ambientes](docs/AMBIENTES_DEV_TEST_PROD.md) describe las rutas, el autorizador y el orden de despliegue. Las URLs de la sección de despliegues corresponden a la versión anterior.
 
-**Parche AWS Academy sin ACM (solo código, no desplegado):** esta rama usa un ALB interno HTTP/80 tras VPC Link V2. Los usuarios siguen accediendo a API Gateway por HTTPS. El tramo privado no tiene TLS y debe revisarse antes de utilizar tráfico real. La migración de stacks existentes requiere inspeccionar los change sets: no ejecutar `./deploy.sh` a ciegas. Ver [ambientes](docs/AMBIENTES_DEV_TEST_PROD.md).
+**Migración de stacks existentes:** requiere inspeccionar los change sets, porque los servicios dejan de crear su propio gateway. No ejecutar `./deploy.sh` a ciegas sobre un ambiente en uso. Ver [ambientes](docs/AMBIENTES_DEV_TEST_PROD.md).
 
 ## Documentación
 

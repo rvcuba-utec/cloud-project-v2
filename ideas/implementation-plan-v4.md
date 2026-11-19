@@ -1,6 +1,6 @@
 # Trazora FSM: plan de construcción y despliegue (v4)
 
-> Este plan recoge el diseño original. El [ingreso privado de la rama](../docs/AMBIENTES_DEV_TEST_PROD.md) actualiza la topología de API Gateway, VPC Link y ALB.
+> Este plan recoge el diseño original. El [gateway compartido de la rama](../docs/AMBIENTES_DEV_TEST_PROD.md) actualiza la topología: un API Gateway por ambiente, sin VPC Link ni ALB.
 
 **Estado:** aprobado (sección 5).
 **Alcance:** backend, frontend, despliegue, datos, pruebas y documentación técnica.
