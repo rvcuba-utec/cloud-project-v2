@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { ApiError } from '../api/client';
 
 /* Componentes base sobre el sistema del kit (public/assets/system.css): .btn, .card y sus tokens.
@@ -163,6 +164,44 @@ export function Tabla({ columnas, children, vacio, cargando = false }: { columna
 
 export function Cargando({ texto = 'Cargando…' }: { texto?: string }) {
   return <p className="flex items-center gap-2 text-muted"><span className="size-2 animate-pulse rounded-full bg-accent" />{texto}</p>;
+}
+
+export interface AvisoToast {
+  id: number;
+  texto: string;
+  tono: 'bien' | 'error';
+  deshacer?: () => void;
+  enlace?: { a: string; texto: string };
+}
+
+const DURACION_TOAST_MS = 8000;
+
+/** Aviso breve abajo a la izquierda, con «Deshacer» si la acción se puede revertir. */
+export function Toast({ aviso, onCerrar }: { aviso: AvisoToast | null; onCerrar: () => void }) {
+  const id = aviso?.id;
+  useEffect(() => {
+    if (id === undefined) return;
+    const t = setTimeout(onCerrar, DURACION_TOAST_MS);
+    return () => clearTimeout(t);
+  }, [id, onCerrar]);
+  if (!aviso) return null;
+  const color = aviso.tono === 'bien' ? 'var(--color-good)' : 'var(--color-critical)';
+  return (
+    <div role={aviso.tono === 'error' ? 'alert' : 'status'} aria-live="polite"
+      className="fixed bottom-4 left-4 z-50 w-[min(420px,calc(100vw-32px))]">
+      <div className="entra card !gap-2 border-l-4 !p-4 shadow-xl" style={{ borderLeftColor: color }}>
+        <p className="text-[15px] text-ink">{aviso.texto}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {aviso.deshacer && (
+            <button type="button" className="text-[15px] font-medium text-accent hover:underline"
+              onClick={() => { aviso.deshacer?.(); onCerrar(); }}>Deshacer</button>
+          )}
+          {aviso.enlace && <Link className="link text-[15px]" to={aviso.enlace.a}>{aviso.enlace.texto}</Link>}
+          <button type="button" className="ml-auto text-[13px] text-muted hover:underline" onClick={onCerrar}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** Confirmación con el detalle de lo que pasará. Se cierra con Escape y devuelve el foco. */
