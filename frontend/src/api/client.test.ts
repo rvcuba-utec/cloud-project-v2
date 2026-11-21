@@ -7,6 +7,7 @@ vi.stubGlobal('sessionStorage', {
   removeItem: (k: string) => void almacen.delete(k),
 });
 vi.stubEnv('VITE_API_ORDENES', 'https://api.ejemplo/dev');
+vi.stubEnv('VITE_API_AGENDA', '');
 
 const { api, ApiError, configurarSesionExpirada } = await import('./client');
 const { MAX_BYTES, construirFormulario, problemaDeArchivo } = await import('./evidencias');
