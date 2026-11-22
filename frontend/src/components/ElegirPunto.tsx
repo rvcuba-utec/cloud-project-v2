@@ -6,10 +6,12 @@ import { colorToken } from '../theme/tema';
 const LIMA: L.LatLngTuple = [-12.075, -77.02];
 
 /** Un clic en el mapa marca el local; así aparece en el mapa del panel. */
-export default function ElegirPunto({ valor, onCambio, puntos = [] }: {
+export default function ElegirPunto({ valor, onCambio, puntos = [], foco = 0 }: {
   valor: { lat: number; lng: number } | null;
   onCambio: (p: { lat: number; lng: number }) => void;
   puntos?: { lat: number; lng: number; nombre: string }[];
+  /** Cada vez que cambia, el mapa se acerca al punto (por ejemplo, tras buscar una dirección escrita). */
+  foco?: number;
 }) {
   const caja = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
@@ -34,6 +36,10 @@ export default function ElegirPunto({ valor, onCambio, puntos = [] }: {
     marca.current?.remove();
     if (valor) marca.current = L.circleMarker([valor.lat, valor.lng], { radius: 9, color: colorToken('--p-card'), weight: 3, fillColor: colorToken('--p-accent'), fillOpacity: 1 }).addTo(mapa.current);
   }, [valor]);
+
+  useEffect(() => {
+    if (foco && valor && mapa.current) mapa.current.setView([valor.lat, valor.lng], 17);
+  }, [foco]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <div ref={caja} className="isolate h-72 cursor-crosshair overflow-hidden rounded-xl border border-line bg-surface" role="application" aria-label="Mapa: haz clic para marcar el local" />;
 }

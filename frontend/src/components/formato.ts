@@ -85,3 +85,16 @@ export function hace(iso: string): string {
   if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
   return fechaHora(iso);
 }
+
+/** Para buscar por texto: sin tildes, sin mayúsculas y sin espacios sobrantes ("Pérez" se encuentra con "perez"). */
+export function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Todas las palabras escritas deben aparecer en el texto, en cualquier orden. Sin búsqueda, todo coincide. */
+export function coincide(texto: string, busqueda: string): boolean {
+  const palabras = normalizar(busqueda).split(' ').filter(Boolean);
+  if (!palabras.length) return true;
+  const base = normalizar(texto);
+  return palabras.every((p) => base.includes(p));
+}

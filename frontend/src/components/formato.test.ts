@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fechaHora, horaLima, instanteLima, sumarDias } from './formato';
+import { coincide, fechaHora, horaLima, instanteLima, normalizar, sumarDias } from './formato';
 
 describe('formato', () => {
   it('muestra la hora de Lima a partir de UTC', () => {
@@ -15,5 +15,23 @@ describe('formato', () => {
   });
   it('cruza el fin de mes', () => {
     expect(sumarDias('2026-11-30', 1)).toBe('2026-12-01');
+  });
+});
+
+describe('búsqueda por texto', () => {
+  it('ignora tildes, mayúsculas y espacios sobrantes', () => {
+    expect(normalizar('  Sofía   PÉREZ ')).toBe('sofia perez');
+  });
+  it('encuentra por nombre sin importar tildes ni mayúsculas', () => {
+    expect(coincide('Ana Huamán', 'huaman')).toBe(true);
+    expect(coincide('Ana Huamán', 'ANA')).toBe(true);
+  });
+  it('exige todas las palabras, en cualquier orden', () => {
+    expect(coincide('Ana Huamán', 'huaman ana')).toBe(true);
+    expect(coincide('Ana Huamán', 'ana castillo')).toBe(false);
+  });
+  it('sin búsqueda, todo coincide', () => {
+    expect(coincide('Ana Huamán', '')).toBe(true);
+    expect(coincide('Ana Huamán', '   ')).toBe(true);
   });
 });
