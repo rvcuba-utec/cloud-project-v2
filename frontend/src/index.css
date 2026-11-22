@@ -68,3 +68,8 @@ body { background: var(--p-bg); color: var(--p-ink); font-family: var(--font-tex
 .mayuscula-inicial::first-letter { text-transform: uppercase; }
 /* Teselas de OpenStreetMap en tono cálido, para que el mapa pertenezca a la paleta. */
 .teselas { filter: sepia(.18) saturate(.8) contrast(.96); }
+
+/* Arrastre en la Agenda: el asa bloquea el desplazamiento táctil; los bloques fijos se distinguen sin impedir el clic. */
+.asa-arrastre { touch-action: none; }
+.bloque-fijo { border-style: solid; cursor: pointer; }
+.fantasma-arrastre { pointer-events: none; will-change: transform; }
