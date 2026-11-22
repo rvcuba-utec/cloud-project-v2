@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App';
 import { AuthProvider } from './auth/AuthContext';
+import { restaurarTema } from './theme/tema';
+
+restaurarTema();
 
 const clienteConsultas = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },

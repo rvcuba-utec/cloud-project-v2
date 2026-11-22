@@ -11,7 +11,7 @@ const DIAS = 14;
 
 function TarjetaVisita({ v, onIniciar, iniciando, destacada = false }: { v: Visita; onIniciar: () => void; iniciando: boolean; destacada?: boolean }) {
   return (
-    <li className={`card m-nolift !gap-1 ${destacada ? 'border-accent shadow-[inset_0_0_0_1px_var(--p-accent)]' : ''}`}>
+    <li className={`card !gap-1 ${destacada ? 'border-accent shadow-[inset_0_0_0_1px_var(--p-accent)]' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <p className="font-display tabular text-[26px] leading-none">{horaLima(v.inicio)}<span className="text-[16px] text-muted">–{horaLima(v.fin)}</span></p>
         <Insignia tono={TONO[v.estado]} vivo={v.estado === 'EN_ATENCION'}>{ESTADOS_VISITA[v.estado]}</Insignia>
@@ -82,7 +82,7 @@ export default function MisVisitas() {
             <h2 id="hoy" className="font-display text-2xl">Hoy</h2>
             <span className="text-[15px] text-muted">{pendientesHoy.length} por hacer · {terminadasHoy.length} terminadas</span>
           </div>
-          {pendientesHoy.length === 0 && <p className="card m-nolift text-[16px]">{terminadasHoy.length ? 'Terminaste las visitas de hoy.' : 'No tienes visitas para hoy.'}</p>}
+          {pendientesHoy.length === 0 && <p className="card text-[16px]">{terminadasHoy.length ? 'Terminaste las visitas de hoy.' : 'No tienes visitas para hoy.'}</p>}
           <ul className="grid gap-3 md:grid-cols-2">
             {pendientesHoy.map((v) => (
               <TarjetaVisita key={v.visita_id} v={v} destacada={v === siguiente} iniciando={iniciar.isPending} onIniciar={() => iniciar.mutate(v.visita_id)} />

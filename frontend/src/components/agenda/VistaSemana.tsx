@@ -78,7 +78,7 @@ export default function VistaSemana({
 
   if (!tecnicosActivos.length) {
     return (
-      <div className="card m-nolift items-start">
+      <div className="card items-start">
         <p className="text-[16px]">No hay técnicos activos para mostrar con ese filtro.</p>
       </div>
     );
@@ -109,7 +109,7 @@ export default function VistaSemana({
 
       <MensajeError error={semana.error ?? visitas.error} />
       {semana.isLoading || visitas.isLoading ? <Cargando /> : (
-        <div data-scroll-agenda className="overflow-x-auto rounded-[20px] border border-line bg-surface/40">
+        <div data-scroll-agenda className="overflow-x-auto rounded-2xl border border-line bg-card">
           <div className="flex min-w-[920px]">
             <div className="sticky left-0 z-10 bg-ground/95 pt-[72px]"><Horas /></div>
             {dias.map((dia) => {

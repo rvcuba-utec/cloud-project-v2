@@ -6,8 +6,8 @@ import { ApiError } from '../api/client';
    Un botón principal por vista; el resto, secundarios. */
 
 export const CAMPO =
-  'mt-1 h-11 w-full rounded-lg border border-line-strong bg-card px-3 text-[16px] text-ink ' +
-  'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25';
+  'mt-1 h-11 w-full rounded-lg border border-line-strong bg-card px-3 text-[16px] text-ink transition-[border-color,box-shadow] duration-150 ' +
+  'placeholder:text-muted/70 hover:border-ink/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25';
 export const AREA = CAMPO.replace('h-11', 'min-h-24 py-2');
 
 export function Campo({ etiqueta, children, ayuda }: { etiqueta: string; children: ReactNode; ayuda?: string }) {
@@ -51,7 +51,7 @@ export function MensajeError({ error }: { error: unknown }) {
 
 export function Tarjeta({ children, className = '', titulo, accion }: { children: ReactNode; className?: string; titulo?: string; accion?: ReactNode }) {
   return (
-    <div className={`card m-nolift ${className}`}>
+    <div className={`card ${className}`}>
       {(titulo || accion) && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           {titulo && <h2 className="text-[17px] font-medium tracking-tight text-ink">{titulo}</h2>}
@@ -65,10 +65,10 @@ export function Tarjeta({ children, className = '', titulo, accion }: { children
 
 export function Encabezado({ titulo, subtitulo, children }: { titulo: string; subtitulo?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="font-display text-[clamp(28px,2.4vw+14px,42px)] leading-[1.05] text-ink">{titulo}</h1>
-        {subtitulo && <p className="mt-2 max-w-[62ch] text-muted">{subtitulo}</p>}
+        <h1 className="font-display text-[clamp(28px,1.6vw+16px,36px)] leading-[1.08] text-ink">{titulo}</h1>
+        {subtitulo && <p className="mt-1.5 max-w-[68ch] text-muted">{subtitulo}</p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-3">{children}</div>}
     </div>
@@ -103,7 +103,7 @@ export function Insignia({ tono, children, vivo = false }: { tono: Tono; childre
 
 export function Cifra({ etiqueta, valor, nota, tono }: { etiqueta: string; valor: ReactNode; nota?: ReactNode; tono?: Tono }) {
   return (
-    <div className="card m-nolift !gap-1">
+    <div className="card !gap-1">
       <p className="flex items-center gap-2 text-[13px] font-medium text-muted">
         {tono && <span className={`size-2 rounded-full ${PUNTO[tono]}`} aria-hidden="true" />}{etiqueta}
       </p>
@@ -149,12 +149,12 @@ export function useClaveIdempotencia() {
 
 export function Tabla({ columnas, children, vacio, cargando = false }: { columnas: string[]; children: ReactNode; vacio: boolean; cargando?: boolean }) {
   return (
-    <div className="overflow-x-auto rounded-[20px] border border-line bg-card">
+    <div className="overflow-x-auto rounded-2xl border border-line bg-card">
       <table className="w-full text-left text-[15px]">
-        <thead className="border-b border-line text-[13px] text-muted">
+        <thead className="border-b border-line bg-surface/50 text-[13px] text-muted">
           <tr>{columnas.map((c) => <th key={c} scope="col" className="px-4 py-3 font-medium">{c}</th>)}</tr>
         </thead>
-        <tbody className="divide-y divide-line [&_td]:px-4 [&_td]:py-3 [&_tr]:transition-colors [&_tr:hover]:bg-surface/40">{children}</tbody>
+        <tbody className="divide-y divide-line [&_td]:px-4 [&_td]:py-3 [&_tr]:transition-colors [&_tr:hover]:bg-accent-soft/50">{children}</tbody>
       </table>
       {cargando && <p className="p-6 text-center text-muted">Cargando…</p>}
       {!cargando && vacio && <p className="p-6 text-center text-muted">No hay registros.</p>}
@@ -185,12 +185,14 @@ export function Toast({ aviso, onCerrar }: { aviso: AvisoToast | null; onCerrar:
     return () => clearTimeout(t);
   }, [id, onCerrar]);
   if (!aviso) return null;
-  const color = aviso.tono === 'bien' ? 'var(--color-good)' : 'var(--color-critical)';
+  const bien = aviso.tono === 'bien';
   return (
     <div role={aviso.tono === 'error' ? 'alert' : 'status'} aria-live="polite"
       className="fixed bottom-4 left-4 z-50 w-[min(420px,calc(100vw-32px))]">
-      <div className="entra card !gap-2 border-l-4 !p-4 shadow-xl" style={{ borderLeftColor: color }}>
-        <p className="text-[15px] text-ink">{aviso.texto}</p>
+      <div className="entra card !gap-2 !p-4 shadow-xl">
+        <p className="flex items-start gap-2 text-[15px] text-ink">
+          <span className={`mt-[7px] size-2 shrink-0 rounded-full ${bien ? 'bg-good' : 'bg-critical'}`} aria-hidden="true" />{aviso.texto}
+        </p>
         <div className="flex flex-wrap items-center gap-3">
           {aviso.deshacer && (
             <button type="button" className="text-[15px] font-medium text-accent hover:underline"
@@ -218,7 +220,7 @@ export function Confirmacion({ abierta, titulo, children, confirmar, cancelar, o
   }, [abierta]);
   return (
     <dialog ref={ref} onCancel={(e) => { e.preventDefault(); onCancelar(); }}
-      className="m-auto w-[min(520px,calc(100vw-32px))] rounded-[20px] border border-line bg-card p-0 text-ink shadow-2xl backdrop:bg-ink/40">
+      className="m-auto w-[min(520px,calc(100vw-32px))] rounded-2xl border border-line bg-card p-0 text-ink shadow-2xl backdrop:bg-ink/40 backdrop:backdrop-blur-[2px]">
       <div className="space-y-4 p-6">
         <h2 className="font-display text-2xl">{titulo}</h2>
         <div className="space-y-3 text-[16px] leading-relaxed">{children}</div>

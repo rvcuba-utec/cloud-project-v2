@@ -1,0 +1,71 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "mockups/landing-a.html"
+        ],
+        "createdAt": "2026-11-22T16:32:22.577Z",
+        "reason": "falso positivo: bordes de sección a sangre, filas de altura fija, lienzo del mapa y control segmentado de 2px son intencionales (decidió el modelo, sin confirmación del usuario)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "mockups/landing-b.html"
+        ],
+        "createdAt": "2026-11-22T16:32:22.622Z",
+        "reason": "falso positivo: bordes de sección a sangre, filas de altura fija, lienzo del mapa y control segmentado de 2px son intencionales (decidió el modelo, sin confirmación del usuario)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "mockups/dashboard.html"
+        ],
+        "createdAt": "2026-11-22T16:32:22.669Z",
+        "reason": "falso positivo: bordes de sección a sangre, filas de altura fija, lienzo del mapa y control segmentado de 2px son intencionales (decidió el modelo, sin confirmación del usuario)"
+      },
+      {
+        "rule": "repeated-container-text",
+        "value": "*",
+        "files": [
+          "mockups/landing-b.html"
+        ],
+        "createdAt": "2026-11-22T16:32:22.714Z",
+        "reason": "falso positivo: nombres de técnicos y estados repetidos son datos reales de las filas del tablero"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "mockups/landing-b.html"
+        ],
+        "createdAt": "2026-11-22T16:32:22.760Z",
+        "reason": "indicador 'En vivo' del tablero simulado; parpadeo lento y con texto al lado"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "frontend/public/presentacion/index.html"
+        ],
+        "createdAt": "2026-11-22T16:50:55.504Z",
+        "reason": "falso positivo: filas de altura fija, tabla y mapa a sangre dentro de contenedores con borde (decidió el modelo, sin confirmación del usuario)"
+      },
+      {
+        "rule": "repeated-container-text",
+        "value": "*",
+        "files": [
+          "frontend/public/presentacion/index.html"
+        ],
+        "createdAt": "2026-11-22T16:50:55.519Z",
+        "reason": "falso positivo: nombres y estados repetidos son los datos del tablero de ejemplo"
+      }
+    ]
+  }
+}

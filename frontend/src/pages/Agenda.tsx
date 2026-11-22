@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { agenda, tecnicos, todas, type Especialidad, type Orden, type Tecnico, type Visita } from '../api/recursos';
+import { agenda, alertas, mapa, tecnicos, todas, type Especialidad, type Orden, type Tecnico, type Visita } from '../api/recursos';
 import { BloqueVisita, Columna, Horas, LeyendaCalendario, type DestinoVisual } from '../components/Calendario';
 import InputFecha from '../components/InputFecha';
+import MapaOrdenes from '../components/MapaOrdenes';
 import ReprogramarVisita from '../components/ReprogramarVisita';
 import BandejaOrdenes, { DURACION_BANDEJA_MIN } from '../components/agenda/BandejaOrdenes';
 import Fantasma from '../components/agenda/Fantasma';
@@ -11,7 +12,7 @@ import VistaSemana, { type DatosSemana } from '../components/agenda/VistaSemana'
 import { TEXTO_MOTIVO, duracionDe, moverBloque, validarSoltar } from '../components/agenda/dnd';
 import { useArrastre } from '../components/agenda/useArrastre';
 import { useMoverVisita } from '../components/agenda/useMoverVisita';
-import { ESPECIALIDADES, ESTADOS_VISITA, fechaLarga, horaLima, hoyLima, lunesDe, sumarDias } from '../components/formato';
+import { ESPECIALIDADES, ESTADOS_VISITA, fechaLarga, hace, horaLima, hoyLima, lunesDe, sumarDias } from '../components/formato';
 import { AREA, Boton, CAMPO, Campo, Cargando, Confirmacion, Encabezado, Insignia, MensajeError, Toast } from '../components/ui';
 
 const ESPERA_MS = 30_000;
@@ -37,6 +38,7 @@ export default function Agenda() {
   const [motivo, setMotivo] = useState('Enfermedad');
   const [esperando, setEsperando] = useState<number | null>(null);
   const [pagina, setPagina] = useState(0);
+  const [resaltada, setResaltada] = useState<string | null>(null);
   useEffect(() => setPagina(0), [fecha, especialidad, todos]);
 
   const arrastradoRef = useRef<Arrastrado | null>(null);
@@ -49,6 +51,8 @@ export default function Agenda() {
     enabled: vista === 'dia',
     refetchInterval: () => (esperando && Date.now() < esperando ? 2000 : 30_000),
   });
+  const puntosMapa = useQuery({ queryKey: ['mapa'], queryFn: mapa.ordenes, refetchInterval: 30_000 });
+  const avisos = useQuery({ queryKey: ['alertas'], queryFn: alertas.listar, refetchInterval: 15_000 });
   const perfiles = useQuery({ queryKey: ['tecnicos-todos'], queryFn: () => todas((cursor) => tecnicos.listar({ cursor, limit: 100 })) });
   const libres = useQuery({
     queryKey: ['tecnicos-disponibles', fecha],
@@ -88,6 +92,10 @@ export default function Agenda() {
   const paginas = Math.max(1, Math.ceil(columnas.length / POR_PAGINA));
   const actual = Math.min(pagina, paginas - 1); // si la lista se acorta, no se queda en una página vacía
   const visibles = columnas.slice(actual * POR_PAGINA, (actual + 1) * POR_PAGINA);
+  const avisoReciente = useMemo(() => {
+    const a = avisos.data?.recientes.find((x) => x.tipo === 'REASIGNADA');
+    return a && avisos.dataUpdatedAt - new Date(a.creado_en).getTime() < 6 * 3600_000 ? a : undefined;
+  }, [avisos.data, avisos.dataUpdatedAt]);
   const sinTecnico = visitas.data?.filter((v) => v.requiere_reprogramacion && v.estado === 'PROGRAMADA') ?? [];
 
   const movimiento = useMoverVisita();
@@ -197,11 +205,11 @@ export default function Agenda() {
   return (
     <>
       <Encabezado titulo="Agenda" subtitulo="Arrastra visitas para reprogramarlas o suelta órdenes sin visita sobre un técnico libre. Si alguien no puede venir, márcalo ausente y sus visitas se reasignan solas.">
-        <div role="group" aria-label="Modo de vista" className="inline-flex rounded-lg border border-line bg-card p-0.5">
+        <div role="group" aria-label="Modo de vista" className="inline-flex rounded-xl border border-line bg-card p-0.5">
           <button type="button" onClick={() => cambiarVista('dia')} aria-pressed={vista === 'dia'}
-            className={`rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors ${vista === 'dia' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}>Día</button>
+            className={`rounded-lg px-3.5 py-1.5 text-[14px] font-medium transition-[background-color,color,transform] duration-150 active:scale-95 ${vista === 'dia' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink'}`}>Día</button>
           <button type="button" onClick={() => cambiarVista('semana')} aria-pressed={vista === 'semana'}
-            className={`rounded-md px-3 py-1.5 text-[14px] font-medium transition-colors ${vista === 'semana' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}>Semana</button>
+            className={`rounded-lg px-3.5 py-1.5 text-[14px] font-medium transition-[background-color,color,transform] duration-150 active:scale-95 ${vista === 'semana' ? 'bg-accent text-accent-ink' : 'text-muted hover:text-ink'}`}>Semana</button>
         </div>
         {vista === 'dia' && (
           <>
@@ -231,16 +239,31 @@ export default function Agenda() {
       </div>
 
       {esperando && (
-        <p role="status" className="entra mb-4 flex items-center gap-2 rounded-xl border border-good/30 bg-good-soft px-4 py-3 text-[15px] text-ink">
+        <p role="status" className="entra mb-3 flex items-center gap-2 rounded-xl border border-good/30 bg-good-soft px-4 py-3 text-[15px] text-ink">
           <span className="size-2 animate-pulse rounded-full bg-good" />Ausencia registrada. Buscando al mejor técnico libre para cada visita…
         </p>
       )}
-      {vista === 'dia' && sinTecnico.length > 0 && (
-        <div className="mb-4 rounded-xl border border-critical/30 bg-critical-soft/70 p-4">
-          <p className="font-medium text-critical">{sinTecnico.length === 1 ? 'Una visita se quedó sin técnico' : `${sinTecnico.length} visitas se quedaron sin técnico`}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {sinTecnico.map((v) => <Boton key={v.visita_id} pequeno flecha onClick={() => setReprogramando(v)}>{horaLima(v.inicio)} {v.cliente_nombre}</Boton>)}
-          </div>
+      {(avisoReciente || (vista === 'dia' && sinTecnico.length > 0)) && (
+        <div className="mb-3 grid gap-2 xl:grid-cols-2">
+          {vista === 'dia' && sinTecnico.length > 0 && (
+            <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-critical/35 bg-critical-soft px-4 py-2.5">
+              <p className="flex items-center gap-2 font-medium text-critical">
+                <svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4Z" /><path d="M12 10v4.5M12 17.5v.01" /></svg>
+                {sinTecnico.length === 1 ? 'Una visita se quedó sin técnico' : `${sinTecnico.length} visitas se quedaron sin técnico`}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {sinTecnico.map((v) => <Boton key={v.visita_id} pequeno flecha onClick={() => setReprogramando(v)}>{horaLima(v.inicio)} {v.cliente_nombre}</Boton>)}
+              </div>
+            </div>
+          )}
+          {avisoReciente && (
+            <p role="status" className="flex items-center gap-2 rounded-xl border border-good/35 bg-good-soft px-4 py-2.5 text-[15px] text-ink">
+              <svg viewBox="0 0 24 24" className="size-4 shrink-0 fill-none stroke-good" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4" /></svg>
+              <span className="font-medium text-good">Reasignada automáticamente</span>
+              <span className="min-w-0 truncate">{avisoReciente.cliente_nombre}: {avisoReciente.detalle}</span>
+              <span className="ml-auto shrink-0 text-[13px] text-muted">{hace(avisoReciente.creado_en)}</span>
+            </p>
+          )}
         </div>
       )}
 
@@ -256,8 +279,8 @@ export default function Agenda() {
         )}
       </div>
 
-      {vista === 'dia' ? (
-        <div className="flex flex-col items-start gap-4 lg:flex-row">
+      <div className="flex flex-col items-start gap-4 lg:flex-row">
+        <div className={`flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-[72px] lg:self-start ${bandejaAbierta ? 'lg:w-[330px]' : 'lg:w-12'}`}>
           <BandejaOrdenes
             especialidad={especialidad}
             abierta={bandejaAbierta}
@@ -265,15 +288,28 @@ export default function Agenda() {
             onArrastrar={iniciarArrastreOrden}
             arrastrandoId={idArrastrandoOrden}
             ocupado={movimiento.programar.isPending}
+            onResaltar={setResaltada}
           />
+          {bandejaAbierta && (
+            <section aria-label="Mapa de órdenes" className="rounded-2xl border border-line bg-card p-3">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <h2 className="text-[15px] font-semibold text-ink">Mapa de órdenes</h2>
+                <span className="text-[12px] text-muted">Lima · vivas y cerradas</span>
+              </div>
+              <MensajeError error={puntosMapa.error} />
+              <MapaOrdenes puntos={puntosMapa.data?.puntos ?? []} alto={220} denso resaltar={resaltada} />
+            </section>
+          )}
+        </div>
+        {vista === 'dia' ? (
           <div className="w-full min-w-0 flex-1">
             {visitas.isLoading || perfiles.isLoading ? <Cargando /> : columnas.length === 0 ? (
-              <div className="card m-nolift items-start">
+              <div className="card items-start">
                 <p className="text-[16px]">No hay visitas este día{especialidad ? ` para ${ESPECIALIDADES[especialidad].toLowerCase()}` : ''}.</p>
                 <Boton variante="secundario" onClick={() => setTodos(true)}>Ver todos los técnicos</Boton>
               </div>
             ) : (
-              <div data-scroll-agenda className="overflow-x-auto rounded-[20px] border border-line bg-surface/40">
+              <div data-scroll-agenda className="overflow-x-auto rounded-2xl border border-line bg-card">
                 <div className="flex min-w-max">
                   <div className="sticky left-0 z-10 bg-ground/95 pt-16"><Horas /></div>
                   {visibles.map((t) => {
@@ -322,8 +358,7 @@ export default function Agenda() {
               </div>
             )}
           </div>
-        </div>
-      ) : perfiles.isLoading ? <Cargando /> : (
+        ) : perfiles.isLoading ? <Cargando /> : (
         <VistaSemana
           tecnicosActivos={tecnicosActivos}
           tecnicoId={tecnicoSemana}
@@ -344,7 +379,8 @@ export default function Agenda() {
           })}
           onDatosSemana={guardarDatosSemana}
         />
-      )}
+        )}
+      </div>
 
       {arrastre.arrastrando && arrastre.puntero && (
         <Fantasma carga={arrastre.arrastrando} puntero={arrastre.puntero} destino={arrastre.destino} />

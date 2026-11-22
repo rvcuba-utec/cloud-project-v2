@@ -3,15 +3,16 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { EstadoOrden, PuntoMapa } from '../api/recursos';
 import { ESTADOS_ORDEN, ESPECIALIDADES } from './formato';
+import { colorToken, useTema } from '../theme/tema';
 import { PUNTO, type Tono } from './ui';
 
 /** Cuatro grupos que se leen de un vistazo: lo que falta atender, lo que ya tiene visita,
     lo que se atiende ahora y lo que quedó resuelto. Rojo y verde, como en una pizarra de taller. */
-export const GRUPOS: { id: string; texto: string; tono: Tono; color: string; estados: EstadoOrden[] }[] = [
-  { id: 'sin', texto: 'Sin atender', tono: 'critico', color: '#a8321f', estados: ['ABIERTA', 'REQUIERE_REVISITA'] },
-  { id: 'prog', texto: 'Con visita', tono: 'aviso', color: '#b37a14', estados: ['PROGRAMADA'] },
-  { id: 'ahora', texto: 'En atención', tono: 'info', color: '#2456b0', estados: ['EN_ATENCION'] },
-  { id: 'ok', texto: 'Atendida', tono: 'bien', color: '#2f7a4a', estados: ['PENDIENTE_DE_CIERRE', 'CIERRE_EN_PROCESO', 'CERRADA'] },
+export const GRUPOS: { id: string; texto: string; tono: Tono; color: string; token: string; estados: EstadoOrden[] }[] = [
+  { id: 'sin', texto: 'Sin atender', tono: 'critico', color: 'var(--pin-critical)', token: '--pin-critical', estados: ['ABIERTA', 'REQUIERE_REVISITA'] },
+  { id: 'prog', texto: 'Con visita', tono: 'aviso', color: 'var(--pin-warning)', token: '--pin-warning', estados: ['PROGRAMADA'] },
+  { id: 'ahora', texto: 'En atención', tono: 'info', color: 'var(--pin-info)', token: '--pin-info', estados: ['EN_ATENCION'] },
+  { id: 'ok', texto: 'Atendida', tono: 'bien', color: 'var(--pin-good)', token: '--pin-good', estados: ['PENDIENTE_DE_CIERRE', 'CIERRE_EN_PROCESO', 'CERRADA'] },
 ];
 export const grupoDe = (estado: EstadoOrden) => GRUPOS.find((g) => g.estados.includes(estado)) ?? GRUPOS[0];
 
@@ -23,7 +24,15 @@ function escapar(t: string) {
   return t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
-export default function MapaOrdenes({ puntos, alto = 460 }: { puntos: PuntoMapa[]; alto?: number }) {
+export default function MapaOrdenes({ puntos, alto = 460, resaltar, denso = false }: {
+  puntos: PuntoMapa[]; alto?: number;
+  /** orden_id que se marca en el mapa (por ejemplo, al pasar el cursor por su tarjeta en la bandeja). */
+  resaltar?: string | null;
+  /** Filtros más pequeños, para el mapa lateral de la Agenda. */
+  denso?: boolean;
+}) {
+  const { tema } = useTema();
+  const marcas = useRef(new Map<string, { marca: L.CircleMarker; g: (typeof GRUPOS)[number] }>());
   const caja = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
   const capa = useRef<L.LayerGroup | null>(null);
@@ -43,30 +52,48 @@ export default function MapaOrdenes({ puntos, alto = 460 }: { puntos: PuntoMapa[
     return () => { mapa.current?.remove(); mapa.current = null; };
   }, []);
 
+  const estiloMarca = (g: (typeof GRUPOS)[number], activa: boolean): L.CircleMarkerOptions => ({
+    radius: activa ? 12 : g.id === 'ok' ? 5 : 8,
+    color: activa ? colorToken('--p-ink') : colorToken('--p-card'),
+    weight: activa ? 3 : 2,
+    fillColor: colorToken(g.token),
+    fillOpacity: g.id === 'ok' && !activa ? 0.75 : 0.95,
+  });
+
   useEffect(() => {
     const grupo = capa.current;
     if (!grupo || !mapa.current) return;
     grupo.clearLayers();
+    marcas.current.clear();
     const visibles = puntos.filter((p) => !ocultos.has(grupoDe(p.estado).id));
     // Lo urgente se dibuja encima.
     const orden = ['ok', 'prog', 'ahora', 'sin'];
     visibles.sort((a, b) => orden.indexOf(grupoDe(a.estado).id) - orden.indexOf(grupoDe(b.estado).id));
     visibles.forEach((p) => {
       const g = grupoDe(p.estado);
-      const marca = L.circleMarker([p.lat, p.lng], {
-        radius: g.id === 'ok' ? 5 : 8, color: '#f8f4ee', weight: 2, fillColor: g.color, fillOpacity: g.id === 'ok' ? 0.75 : 0.95,
-      });
+      const marca = L.circleMarker([p.lat, p.lng], estiloMarca(g, false));
       marca.bindPopup(
-        `<div style="font:15px/1.4 var(--font-text);min-width:200px">
+        `<div style="font:14px/1.45 var(--font-text);min-width:200px;color:var(--p-ink)">
            <strong>${escapar(p.cliente_nombre)}</strong><br>
-           <span style="color:#5a5c53">${escapar(p.distrito)} · ${escapar(ESPECIALIDADES[p.tipo_servicio] ?? '')}</span><br>
+           <span style="color:var(--p-muted)">${escapar(p.distrito)} · ${escapar(ESPECIALIDADES[p.tipo_servicio] ?? '')}</span><br>
            <span>${escapar(ESTADOS_ORDEN[p.estado])}${p.prioridad === 'ALTA' ? ' · prioridad alta' : ''}</span><br>
-           <a href="/ordenes/${encodeURIComponent(p.orden_id)}" style="color:#2e5b44;font-weight:500">Abrir la orden →</a>
+           <a href="/ordenes/${encodeURIComponent(p.orden_id)}" style="color:var(--p-accent);font-weight:500">Abrir la orden →</a>
          </div>`,
       );
       marca.addTo(grupo);
+      marcas.current.set(p.orden_id, { marca, g });
     });
-  }, [puntos, ocultos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puntos, ocultos, tema]);
+
+  useEffect(() => {
+    marcas.current.forEach(({ marca, g }, id) => {
+      const activa = id === resaltar;
+      marca.setStyle(estiloMarca(g, activa));
+      if (activa) marca.bringToFront();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resaltar, puntos, ocultos, tema]);
 
   // Encuadra los puntos la primera vez que llegan; después respeta lo que el usuario movió.
   const encuadrado = useRef(false);
@@ -80,19 +107,19 @@ export default function MapaOrdenes({ puntos, alto = 460 }: { puntos: PuntoMapa[
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Mostrar en el mapa">
+      <div className={`flex flex-wrap ${denso ? 'mb-2 gap-1.5' : 'mb-3 gap-2'}`} role="group" aria-label="Mostrar en el mapa">
         {GRUPOS.map((g) => {
           const activo = !ocultos.has(g.id);
           return (
             <button key={g.id} type="button" aria-pressed={activo} onClick={() => alternar(g.id)}
-              className={`inline-flex h-9 items-center gap-2 rounded-full border px-3 text-[14px] font-medium transition-colors ${activo ? 'border-line-strong bg-card text-ink' : 'border-line bg-transparent text-muted line-through'}`}>
+              className={`inline-flex items-center rounded-full border font-medium transition-[border-color,color,transform] duration-150 active:scale-95 ${denso ? 'h-7 gap-1.5 px-2.5 text-[12px]' : 'h-9 gap-2 px-3 text-[14px]'} ${activo ? 'border-line-strong bg-card text-ink hover:border-ink' : 'border-line bg-transparent text-muted line-through'}`}>
               <span className={`size-2.5 rounded-full ${PUNTO[g.tono]}`} aria-hidden="true" />
               {g.texto}<span className="tabular text-muted">{conteo[g.id] ?? 0}</span>
             </button>
           );
         })}
       </div>
-      <div ref={caja} style={{ height: alto }} className="isolate overflow-hidden rounded-[20px] border border-line bg-surface"
+      <div ref={caja} style={{ height: alto }} className="isolate overflow-hidden rounded-xl border border-line bg-surface"
         role="region" aria-label="Mapa de órdenes por estado" />
     </div>
   );

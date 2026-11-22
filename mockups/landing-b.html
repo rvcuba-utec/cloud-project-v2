@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trazora · Landing B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500..800&family=Onest:wght@400;500;600&family=Fragment+Mono:ital@0;1&display=swap">
+<style>
+/* Dirección B, "Tablero": un tablero de salidas. Primero oscuro, tipografía enorme, filas que se reordenan.
+   El lima es un marcador fluorescente: solo rellena (con texto oscuro), nunca se usa como color de texto sobre claro. */
+:root {
+  --bg: #090B0E; --s1: #11151A; --s2: #181D23; --ink: #F1F3F5; --ink2: #C3C9D0; --mut: #8C95A0;
+  --line: #232A32; --line2: #1A2027; --lime: #C9F03C; --lime-ink: #0A0C0F; --mark: #C9F03C;
+  --crit: #FF6B57; --crit-bg: #2D1511; --warn: #F3B544; --good: #3DD9A0; --info: #6FA8FF;
+  --f-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Onest", system-ui, sans-serif; --f-mono: "Fragment Mono", ui-monospace, Menlo, monospace;
+  --ease: cubic-bezier(.23, 1, .32, 1);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #FFFFFF; --s1: #F1F3F5; --s2: #E6E9ED; --ink: #0A0C0F; --ink2: #2E353D; --mut: #5A6470;
+  --line: #D8DCE1; --line2: #E8EBEE; --mark: #0A0C0F; --crit: #BD2F1C; --crit-bg: #FBE4DF; --warn: #865500; --good: #0C7752; --info: #1F55C9; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #FFFFFF; --s1: #F1F3F5; --s2: #E6E9ED; --ink: #0A0C0F; --ink2: #2E353D; --mut: #5A6470;
+  --line: #D8DCE1; --line2: #E8EBEE; --mark: #0A0C0F; --crit: #BD2F1C; --crit-bg: #FBE4DF; --warn: #865500; --good: #0C7752; --info: #1F55C9; color-scheme: light; }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--f-body); -webkit-font-smoothing: antialiased; transition: background-color .25s var(--ease), color .25s var(--ease); }
+::selection { background: var(--lime); color: var(--lime-ink); }
+:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; border-radius: 3px; }
+:root[data-theme="light"] :focus-visible { outline-color: var(--ink); }
+a { color: inherit; text-decoration: none; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; font-stretch: 100%; letter-spacing: -.02em; line-height: .98; margin: 0; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 40px; }
+.ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+::-webkit-scrollbar { width: 12px; } ::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid var(--bg); border-radius: 8px; }
+
+.btn { display: inline-flex; align-items: center; gap: 12px; height: 52px; padding: 0 24px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 500 16px/1 var(--f-body); cursor: pointer; border-radius: 999px;
+  transition: background-color .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .16s var(--ease); }
+.btn .ico { transition: transform .22s var(--ease); }
+.btn--lime { background: var(--lime); border-color: var(--lime); color: var(--lime-ink); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { border-color: var(--ink); } .btn--lime:hover { background: var(--ink); border-color: var(--ink); color: var(--bg); } .btn:hover .ico { transform: translateX(4px); }
+}
+.btn:active { transform: scale(.97); }
+
+.nav { position: sticky; top: 0; z-index: 30; background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(12px); }
+.nav .wrap { display: flex; align-items: center; gap: 34px; height: 72px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 21px/1 var(--f-display); font-stretch: 85%; letter-spacing: -.02em; }
+.brand svg { width: 28px; height: 28px; }
+.links { display: flex; gap: 6px; margin-right: auto; }
+.links a { font-size: 15px; color: var(--ink2); padding: 8px 14px; border-radius: 999px; transition: background-color .15s var(--ease), color .15s var(--ease); }
+@media (hover: hover) { .links a:hover { background: var(--s1); color: var(--ink); } }
+.theme { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 50%; cursor: pointer; transition: border-color .18s var(--ease), transform .16s var(--ease); }
+.theme:hover { border-color: var(--ink); } .theme:active { transform: scale(.92); }
+.theme .sun { display: block; } .theme .moon { display: none; }
+:root[data-theme="light"] .theme .sun { display: none; } :root[data-theme="light"] .theme .moon { display: block; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .theme .sun { display: none; } :root:not([data-theme="dark"]) .theme .moon { display: block; } }
+.nav .btn { height: 44px; padding: 0 20px; font-size: 15px; }
+
+/* Hero */
+.hero { padding-top: 56px; }
+.hero h1 { font-size: clamp(54px, 6.4vw, 92px); letter-spacing: -.025em; max-width: 15ch; }
+.hero h1 span { display: inline-block; animation: up .8s var(--ease) both; animation-delay: calc(var(--i) * 70ms); }
+.hero-sub { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); column-gap: 6%; align-items: end; margin-top: 40px; }
+.lede { font-size: 20px; color: var(--ink2); max-width: 52ch; animation: up .8s .35s var(--ease) both; }
+.cta { display: flex; gap: 12px; justify-content: flex-end; animation: up .8s .45s var(--ease) both; }
+@keyframes up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+mark { background: var(--lime); color: var(--lime-ink); padding: 0 .12em; border-radius: .08em; }
+
+/* Tablero (momento del hero) */
+.board { margin-top: 64px; background: var(--s1); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; animation: up .9s .55s var(--ease) both; }
+.board-top { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 24px; border-bottom: 1px solid var(--line); font: 500 13px/1 var(--f-mono); color: var(--mut); text-transform: uppercase; letter-spacing: .05em; }
+.board-top b { color: var(--ink); font-weight: 500; }
+.live { display: inline-flex; align-items: center; gap: 8px; } .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: blink 2s var(--ease) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.alertbar { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 24px; font-size: 14px; background: var(--crit-bg); color: var(--crit); border-bottom: 1px solid var(--line); opacity: 0; transform: translateY(-6px); animation: bar 12s var(--ease) infinite; }
+.alertbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--crit); }
+.rowb { display: grid; grid-template-columns: 90px minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) 190px; gap: 16px; align-items: center; height: 64px; padding: 0 24px; border-bottom: 1px solid var(--line2); transition: background-color .2s var(--ease); }
+.rowb:last-of-type { border-bottom: 0; }
+.rowb.head { height: 40px; font: 500 12px/1 var(--f-mono); color: var(--mut); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--line); }
+@media (hover: hover) { .rowb:not(.head):hover { background: var(--s2); } }
+.rowb .t { font: 500 20px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.rowb .c { font: 600 19px/1.2 var(--f-body); letter-spacing: -.01em; }
+.rowb .d, .rowb .s { color: var(--ink2); font-size: 15px; }
+.roll { position: relative; height: 26px; overflow: hidden; }
+.roll > span { position: absolute; left: 0; top: 0; height: 26px; display: flex; align-items: center; white-space: nowrap; font-size: 16px; }
+.roll .b { transform: translateY(100%); opacity: 0; }
+.pill { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 14px; font: 500 12px/1 var(--f-mono); letter-spacing: .02em; border: 1px solid var(--line); color: var(--ink2); white-space: nowrap; }
+.pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill--info { color: var(--info); border-color: currentColor; } .pill--warn { color: var(--warn); border-color: currentColor; } .pill--crit { color: var(--crit); border-color: currentColor; background: var(--crit-bg); } .pill--lime { background: var(--lime); border-color: var(--lime); color: var(--lime-ink); font-weight: 500; }
+.r1 .roll .a { animation: rollA 12s var(--ease) infinite; } .r1 .roll .b { animation: rollB 12s var(--ease) infinite; }
+.r1 .p-a { animation: rollA 12s var(--ease) infinite; } .r1 .p-b { animation: rollB 12s var(--ease) infinite; }
+.r1 .pillbox { position: relative; height: 28px; } .r1 .pillbox > * { position: absolute; left: 0; top: 0; }
+.r1 .p-b { opacity: 0; }
+.r1 { animation: flash 12s var(--ease) infinite; }
+.r5 .roll .a { animation: rollA2 12s var(--ease) infinite; } .r5 .roll .b { animation: rollB2 12s var(--ease) infinite; color: var(--crit); font-weight: 500; }
+.r5 .pillbox { position: relative; height: 28px; } .r5 .pillbox > * { position: absolute; left: 0; top: 0; }
+.r5 .p-a { animation: rollA2 12s var(--ease) infinite; } .r5 .p-b { opacity: 0; animation: rollB2 12s var(--ease) infinite; }
+@keyframes bar { 0%, 14% { opacity: 0; transform: translateY(-6px); } 20%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; transform: translateY(-6px); } }
+@keyframes rollA { 0%, 27% { transform: none; opacity: 1; } 33%, 90% { transform: translateY(-100%); opacity: 0; } 96%, 100% { transform: none; opacity: 1; } }
+@keyframes rollB { 0%, 27% { transform: translateY(100%); opacity: 0; } 33%, 90% { transform: none; opacity: 1; } 96%, 100% { transform: translateY(100%); opacity: 0; } }
+@keyframes rollA2 { 0%, 40% { transform: none; opacity: 1; } 46%, 90% { transform: translateY(-100%); opacity: 0; } 96%, 100% { transform: none; opacity: 1; } }
+@keyframes rollB2 { 0%, 40% { transform: translateY(100%); opacity: 0; } 46%, 90% { transform: none; opacity: 1; } 96%, 100% { transform: translateY(100%); opacity: 0; } }
+@keyframes flash { 0%, 27% { background: transparent; } 33% { background: color-mix(in oklab, var(--lime) 22%, transparent); } 60%, 100% { background: transparent; } }
+.because { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 24px; border-top: 1px solid var(--line); font-size: 15px; color: var(--ink2); opacity: 0; animation: because 12s var(--ease) infinite; }
+.because b { color: var(--ink); font-weight: 600; } .because mark { font: 500 12px/1 var(--f-mono); padding: 5px 8px; text-transform: uppercase; letter-spacing: .04em; }
+@keyframes because { 0%, 36% { opacity: 0; transform: translateY(6px); } 44%, 90% { opacity: 1; transform: none; } 95%, 100% { opacity: 0; transform: translateY(6px); } }
+
+/* Secciones */
+.sec { padding-block: 140px 0; }
+.big { border-top: 1px solid var(--line); }
+.bigrow { position: relative; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); column-gap: 6%; align-items: center; padding: 44px 0; border-bottom: 1px solid var(--line); isolation: isolate; cursor: default; }
+.bigrow::before { content: ""; position: absolute; inset: 0 -40px; background: var(--lime); clip-path: inset(100% 0 0 0); transition: clip-path .45s var(--ease); z-index: -1; }
+.bigrow h2 { font-size: clamp(38px, 5vw, 76px); max-width: 15ch; transition: color .25s var(--ease); }
+.bigrow p { color: var(--ink2); font-size: 18px; max-width: 40ch; transition: color .25s var(--ease); }
+@media (hover: hover) { .bigrow:hover::before { clip-path: inset(0 0 0 0); } .bigrow:hover h2, .bigrow:hover p { color: var(--lime-ink); } }
+.sectitle { display: flex; justify-content: space-between; align-items: end; gap: 40px; margin-bottom: 40px; }
+.sectitle h2 { font-size: clamp(44px, 6vw, 88px); max-width: 12ch; }
+.sectitle p { color: var(--ink2); max-width: 36ch; }
+
+/* Reserva única (interactivo) */
+.slotbox { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: 6%; align-items: center; padding-block: 140px 0; }
+.slotbox h2 { font-size: clamp(40px, 5vw, 72px); max-width: 12ch; }
+.slotbox p { margin-top: 24px; color: var(--ink2); font-size: 18px; max-width: 40ch; }
+.slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.slot { position: relative; height: 84px; border: 1px solid var(--line); border-radius: 12px; background: var(--s1); color: var(--ink); text-align: left; padding: 12px 14px; font: 500 15px/1.2 var(--f-mono); cursor: pointer; display: flex; flex-direction: column; justify-content: space-between;
+  transition: background-color .18s var(--ease), border-color .18s var(--ease), color .18s var(--ease), transform .16s var(--ease); }
+.slot small { font: 400 12px/1 var(--f-body); color: var(--mut); transition: color .18s var(--ease); }
+@media (hover: hover) { .slot:not(.on):hover { border-color: var(--ink); transform: translateY(-2px); } }
+.slot:active { transform: scale(.96); }
+.slot.on { background: var(--lime); border-color: var(--lime); color: var(--lime-ink); } .slot.on small { color: color-mix(in oklab, var(--lime-ink) 70%, transparent); }
+.slot.shake { animation: shake .36s var(--ease); }
+@keyframes shake { 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+.slotmsg { margin-top: 16px; min-height: 24px; font: 400 14px/1.5 var(--f-mono); color: var(--mut); }
+.slotmsg.bad { color: var(--crit); }
+
+/* Funciones */
+.feat { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: 6%; align-items: start; padding-block: 140px 0; }
+.feat-l { position: sticky; top: 120px; }
+.feat-l h2 { font-size: clamp(44px, 5.4vw, 80px); max-width: 9ch; }
+.feat-l p { margin-top: 24px; color: var(--ink2); max-width: 32ch; }
+.panels { display: grid; gap: 20px; }
+.panel { background: var(--s1); border: 1px solid var(--line); border-radius: 16px; padding: 32px; display: grid; gap: 20px; transition: border-color .2s var(--ease), transform .3s var(--ease); }
+@media (hover: hover) { .panel:hover { border-color: var(--mut); transform: translateY(-3px); } }
+.panel h3 { font-size: 36px; letter-spacing: -.03em; }
+.panel p { color: var(--ink2); max-width: 46ch; }
+.map { aspect-ratio: 640 / 300; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.map svg { width: 100%; height: 100%; display: block; }
+.leg { display: flex; flex-wrap: wrap; gap: 8px; }
+.leg span { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 16px; font: 500 13px/1 var(--f-mono); transition: border-color .15s var(--ease); }
+.leg span:hover { border-color: var(--ink); } .leg i { width: 9px; height: 9px; border-radius: 50%; }
+@keyframes ping { 0% { transform: scale(1); opacity: .5; } 80%, 100% { transform: scale(2.8); opacity: 0; } }
+.ping { transform-box: fill-box; transform-origin: center; animation: ping 2.6s var(--ease) infinite; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.parte { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 15px; }
+.parte div { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--line2); transition: background-color .15s var(--ease); }
+.parte div:last-child { border-bottom: 0; } .parte div:hover { background: var(--s2); }
+.parte .ico { color: var(--good); width: 16px; height: 16px; }
+.parte .ph { margin-left: auto; width: 44px; height: 30px; border-radius: 4px; background: var(--s2); border: 1px solid var(--line); position: relative; }
+.parte .ph::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 6px; height: 10px; border: 1.5px solid var(--mut); border-radius: 2px; }
+.al { display: grid; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.al div { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 13px 16px; border-bottom: 1px solid var(--line2); font-size: 15px; transition: background-color .15s var(--ease); }
+.al div:last-child { border-bottom: 0; } .al div:hover { background: var(--s2); }
+.al small { color: var(--mut); font: 400 12.5px/1.4 var(--f-mono); } .al .t { grid-row: 1 / span 2; grid-column: 2; align-self: center; font: 500 12px/1 var(--f-mono); color: var(--mut); }
+.perf { display: grid; gap: 14px; }
+.perf div { display: grid; grid-template-columns: 150px 1fr 56px; gap: 16px; align-items: center; font-size: 15px; }
+.perf i { height: 12px; background: var(--s2); border-radius: 6px; position: relative; overflow: hidden; display: block; }
+.perf i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--mut); border-radius: 6px; }
+.perf .best i::after { background: var(--lime); } .perf em { font: 500 14px/1 var(--f-mono); font-style: normal; text-align: right; }
+
+/* Empresas */
+.tenants { padding-block: 140px 0; }
+.tenants .names { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.tenants .names div { padding: 28px 0 28px 24px; border-left: 1px solid var(--line); font: 700 clamp(26px, 3vw, 44px)/1 var(--f-display); font-stretch: 92%; letter-spacing: -.015em; color: var(--mut); transition: color .25s var(--ease); }
+.tenants .names div:first-child { border-left: 0; padding-left: 0; }
+.tenants .names div:hover { color: var(--ink); }
+.tenants .names small { display: block; margin-top: 10px; font: 400 14px/1.4 var(--f-body); letter-spacing: 0; color: var(--mut); }
+.tenants p.lead { margin-top: 20px; font-size: 18px; color: var(--ink2); max-width: 54ch; margin-bottom: 40px; }
+
+/* CTA */
+.final { margin-top: 140px; }
+.finalcta { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 56px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); position: relative; isolation: isolate; }
+.finalcta::before { content: ""; position: absolute; inset: 0 -40px; background: var(--lime); clip-path: inset(0 100% 0 0); transition: clip-path .5s var(--ease); z-index: -1; }
+.finalcta h2 { font-size: clamp(52px, 8vw, 120px); letter-spacing: -.035em; transition: color .25s var(--ease); }
+.finalcta .arrow { width: clamp(56px, 7vw, 104px); height: clamp(56px, 7vw, 104px); stroke-width: 1.6; transition: transform .4s var(--ease), color .25s var(--ease); }
+@media (hover: hover) { .finalcta:hover::before { clip-path: inset(0 0 0 0); } .finalcta:hover h2, .finalcta:hover .arrow { color: var(--lime-ink); } .finalcta:hover .arrow { transform: translateX(10px); } }
+.finalcta:active h2 { transform: scale(.995); }
+footer .wrap { display: flex; justify-content: space-between; padding-block: 32px 48px; font: 400 13px/1.5 var(--f-mono); color: var(--mut); }
+
+@supports (animation-timeline: view()) {
+  .reveal { animation: up .8s var(--ease) both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+}
+@media (max-width: 1100px) {
+  .wrap { padding-inline: 24px; } .links { display: none; } .nav .wrap { gap: 12px; } .brand { margin-right: auto; }
+  .hero-sub, .bigrow, .slotbox, .feat { grid-template-columns: 1fr; row-gap: 32px; } .cta { justify-content: flex-start; } .feat-l { position: static; }
+  .board { overflow-x: auto; } .board > * { min-width: 920px; } .two { grid-template-columns: 1fr; } .sectitle { flex-direction: column; align-items: start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .001ms !important; scroll-behavior: auto; }
+  .alertbar, .because { opacity: 1; transform: none; } .r1 .roll .a, .r5 .roll .a { transform: translateY(-100%); opacity: 0; } .r1 .roll .b, .r5 .roll .b { transform: none; opacity: 1; } .p-a { opacity: 0; } .p-b { opacity: 1 !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#" aria-label="Trazora, inicio">
+      <svg viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--lime)"/><path d="M8 9h12M14 9v11" stroke="var(--lime-ink)" stroke-width="2.6" stroke-linecap="round"/></svg>
+      Trazora
+    </a>
+    <nav class="links" aria-label="Principal"><a href="#reserva">Reserva única</a><a href="#funciones">Funciones</a><a href="#empresas">Empresas</a></nav>
+    <button class="theme" id="tema" type="button" aria-label="Cambiar entre modo claro y oscuro"><svg class="ico moon"><use href="#i-moon"/></svg><svg class="ico sun"><use href="#i-sun"/></svg></button>
+    <a class="btn btn--lime" href="/login">Entrar a la demo <svg class="ico"><use href="#i-arrow"/></svg></a>
+  </div>
+</header>
+
+<main>
+<section class="hero wrap">
+  <h1><span style="--i:0">Cuando</span> <span style="--i:1">alguien</span> <span style="--i:2">falta,</span> <span style="--i:3">la</span> <span style="--i:4">agenda</span> <span style="--i:5">se</span> <mark style="display:inline-block;animation:up .8s var(--ease) both;animation-delay:420ms">reordena</mark> <span style="--i:7">sola.</span></h1>
+  <div class="hero-sub">
+    <p class="lede">Trazora reparte las órdenes, reserva cada media hora una sola vez y pasa las visitas de quien no puede llegar al técnico libre que mejor resuelve.</p>
+    <div class="cta"><a class="btn btn--lime" href="/login">Entrar a la demo <svg class="ico"><use href="#i-arrow"/></svg></a><a class="btn" href="#funciones">Ver el producto</a></div>
+  </div>
+
+  <div class="board" role="img" aria-label="Tablero de visitas de ClimaLima: la visita de Clínica Rojas pasa de Carlos Villanueva a Ana Huamán y la de Bodega Díaz queda sin técnico libre">
+    <div class="board-top"><span><b>ClimaLima</b> · Visitas</span><span>martes 10 de noviembre</span><span class="live"><i></i>En vivo</span></div>
+    <div class="alertbar"><i class="dot"></i>Carlos Villanueva marcó ausencia a las 08:05. Buscando al mejor técnico libre…</div>
+    <div class="rowb head"><span>Hora</span><span>Cliente</span><span>Distrito</span><span>Servicio</span><span>Técnico</span><span>Estado</span></div>
+    <div class="rowb"><span class="t">08:00</span><span class="c">Taller Torres</span><span class="d">Ate</span><span class="s">Reparación</span><span class="roll"><span class="a" style="position:static">Miguel Ramos</span></span><span><span class="pill pill--info"><i></i>En atención</span></span></div>
+    <div class="rowb r1"><span class="t">09:00</span><span class="c">Clínica Rojas</span><span class="d">San Isidro</span><span class="s">Reparación</span>
+      <span class="roll"><span class="a">Carlos Villanueva</span><span class="b">Ana Huamán</span></span>
+      <span class="pillbox"><span class="pill pill--warn p-a"><i></i>Programada</span><span class="pill pill--lime p-b"><i></i>Reasignada</span></span></div>
+    <div class="rowb"><span class="t">10:00</span><span class="c">Colegio Paredes</span><span class="d">Surco</span><span class="s">Instalación</span><span class="roll"><span class="a" style="position:static">Ana Huamán</span></span><span><span class="pill pill--warn"><i></i>Programada</span></span></div>
+    <div class="rowb"><span class="t">11:00</span><span class="c">Oficinas Flores</span><span class="d">San Borja</span><span class="s">Mantenimiento</span><span class="roll"><span class="a" style="position:static">Miguel Ramos</span></span><span><span class="pill pill--warn"><i></i>Programada</span></span></div>
+    <div class="rowb r5"><span class="t">12:00</span><span class="c">Bodega Díaz</span><span class="d">Lince</span><span class="s">Mantenimiento</span>
+      <span class="roll"><span class="a">Carlos Villanueva</span><span class="b">Sin técnico libre</span></span>
+      <span class="pillbox"><span class="pill pill--warn p-a"><i></i>Programada</span><span class="pill pill--crit p-b"><i></i>Reprogramar</span></span></div>
+    <div class="because"><mark>Por qué</mark><span><b>Ana Huamán</b> tenía 1 visita ese día y 95 % de resolución sin revisita. Nadie más tenía la hora de las 12:00 libre.</span></div>
+  </div>
+</section>
+
+<section class="sec wrap" id="decisiones">
+  <div class="big">
+    <article class="bigrow reveal"><h2>Cada media hora se reserva una sola vez.</h2><p>Dos coordinadores no pueden tomar el mismo horario de un técnico. El segundo ve que ya no está libre.</p></article>
+    <article class="bigrow reveal"><h2>La razón de cada reasignación, a la vista.</h2><p>Especialidad, hora libre, carga del día y resolución sin revisita. El coordinador ve por qué ganó cada técnico.</p></article>
+    <article class="bigrow reveal"><h2>El parte llega con fotos y sin llamadas.</h2><p>El técnico anota diagnóstico, tareas y resultado desde el celular. Al finalizar, la orden pasa sola a pendiente de cierre.</p></article>
+  </div>
+</section>
+
+<section class="wrap slotbox" id="reserva">
+  <div class="reveal"><h2>Pruébalo: toma un horario.</h2><p>Esta es la agenda de Ana Huamán. Reserva una hora y luego intenta reservarla de nuevo, como lo haría otro coordinador.</p></div>
+  <div class="reveal">
+    <div class="slots" id="slots" role="group" aria-label="Horarios de Ana Huamán"></div>
+    <p class="slotmsg" id="slotmsg" role="status">Elige un horario libre.</p>
+  </div>
+</section>
+
+<section class="wrap feat" id="funciones">
+  <div class="feat-l"><h2>De la orden al parte con fotos</h2><p>Lo que Trazora hace por tu coordinación, con los mismos cuatro estados en todas las pantallas.</p></div>
+  <div class="panels">
+    <article class="panel">
+      <h3>Muestra las órdenes en el mapa</h3>
+      <p>Rojo lo que falta atender, ámbar lo que ya tiene visita y verde lo resuelto, distrito por distrito.</p>
+      <div class="map"><svg viewBox="0 0 640 300" aria-hidden="true">
+        <path d="M0 30 C60 50 90 100 130 150 S210 230 250 300" fill="none" stroke="var(--mut)" stroke-width="1.5" stroke-dasharray="3 5"/>
+        <g stroke="var(--line)" stroke-width="1.4" fill="none"><path d="M120 10 L330 170 L640 130"/><path d="M200 300 L330 170 L450 0"/><path d="M110 130 L640 250"/><path d="M330 170 L330 0"/><path d="M330 170 L520 300"/></g>
+        <g font-family="Fragment Mono" font-size="11" fill="var(--mut)"><text x="206" y="88">Jesús María</text><text x="34" y="186">Miraflores</text><text x="318" y="124">San Isidro</text><text x="486" y="116">San Borja</text><text x="392" y="250">Surco</text><text x="532" y="206">La Molina</text><text x="70" y="286">Barranco</text></g>
+        <circle class="ping" cx="300" cy="134" r="8" fill="var(--crit)"/><circle cx="300" cy="134" r="6" fill="var(--crit)"/><circle class="ping" cx="176" cy="170" r="8" fill="var(--crit)" style="animation-delay:.8s"/><circle cx="176" cy="170" r="6" fill="var(--crit)"/>
+        <circle cx="470" cy="134" r="6" fill="var(--warn)"/><circle cx="410" cy="220" r="6" fill="var(--warn)"/>
+        <circle cx="230" cy="114" r="4.5" fill="var(--good)"/><circle cx="360" cy="190" r="4.5" fill="var(--good)"/><circle cx="520" cy="230" r="4.5" fill="var(--good)"/><circle cx="140" cy="260" r="4.5" fill="var(--good)"/>
+      </svg></div>
+      <div class="leg"><span><i style="background:var(--crit)"></i>Sin atender 2</span><span><i style="background:var(--warn)"></i>Con visita 2</span><span><i style="background:var(--good)"></i>Atendida 4</span></div>
+    </article>
+    <div class="two">
+      <article class="panel">
+        <h3>Recoge partes con fotos</h3>
+        <p>Diagnóstico y tareas desde el celular. Fotos de hasta 5 MB.</p>
+        <div class="parte"><div><svg class="ico"><use href="#i-check"/></svg>Diagnóstico: filtro obstruido</div><div><svg class="ico"><use href="#i-check"/></svg>Limpieza de filtro</div><div><svg class="ico"><use href="#i-check"/></svg>Foto del equipo funcionando<span class="ph"></span></div><div><svg class="ico"><use href="#i-check"/></svg>Resultado: resuelto</div></div>
+      </article>
+      <article class="panel">
+        <h3>Avisa cuando falta un técnico</h3>
+        <p>Sin técnico libre, la visita sale como alerta con su ventana de reprogramación.</p>
+        <div class="al"><div><b>Reasignada a Ana</b><span class="t">ahora</span><small>Clínica Rojas, 10:00</small></div><div><b style="color:var(--crit)">Sin técnico libre</b><span class="t">1 min</span><small>Bodega Díaz, 12:00</small></div><div><b>Carlos marcó ausencia</b><span class="t">2 min</span><small>Enfermedad, martes 10</small></div></div>
+      </article>
+    </div>
+    <article class="panel">
+      <h3>Mide la resolución sin revisita</h3>
+      <p>Cada técnico suma visitas, tiempo medio y cuántas veces resolvió a la primera.</p>
+      <div class="perf"><div class="best"><span>Ana Huamán</span><i style="--w:95%"></i><em>95 %</em></div><div><span>Miguel Ramos</span><i style="--w:93%"></i><em>93 %</em></div><div><span>Carlos Villanueva</span><i style="--w:88%"></i><em>88 %</em></div></div>
+    </article>
+  </div>
+</section>
+
+<section class="wrap tenants" id="empresas">
+  <div class="sectitle reveal"><h2>Cada empresa ve solo lo suyo.</h2></div>
+  <p class="lead reveal">Se entra con el código de la empresa. Pedir una orden de ClimaLima con el acceso de FríoSur responde 404.</p>
+  <div class="names reveal"><div>CLIMALIMA</div><div>FRIOSUR</div><div>TECNINORTE</div></div>
+</section>
+
+<section class="wrap final">
+  <a class="finalcta" href="/login"><h2>Entrar a la demo</h2><svg class="ico arrow" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+</section>
+</main>
+<footer><div class="wrap"><span>Trazora · Gestión de visitas técnicas</span><span>Proyecto de Cloud Computing, UTEC 2026</span></div></footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var s = localStorage.getItem('trazora-tema'); if (s) root.setAttribute('data-theme', s); } catch (e) {}
+  document.getElementById('tema').addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    var dark = cur ? cur === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches;
+    var n = dark ? 'light' : 'dark'; root.setAttribute('data-theme', n);
+    try { localStorage.setItem('trazora-tema', n); } catch (e) {}
+  });
+  var box = document.getElementById('slots'), msg = document.getElementById('slotmsg');
+  var horas = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30'];
+  var tomadas = { '10:00': 'Colegio Paredes' };
+  horas.forEach(function (h) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'slot';
+    b.innerHTML = '<span>' + h + '</span><small></small>';
+    function pinta() { var t = tomadas[h]; b.classList.toggle('on', !!t); b.querySelector('small').textContent = t || 'Libre'; b.setAttribute('aria-pressed', t ? 'true' : 'false'); }
+    b.addEventListener('click', function () {
+      if (tomadas[h]) {
+        msg.textContent = h + ' ya está reservada (' + tomadas[h] + '). Elige otra hora.'; msg.className = 'slotmsg bad';
+        b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+      } else { tomadas[h] = 'Clínica Rojas'; msg.textContent = 'Reservaste ' + h + '–' + (h.slice(3) === '00' ? h.slice(0, 3) + '30' : String(+h.slice(0, 2) + 1).padStart(2, '0') + ':00') + '. Si otro coordinador la pide ahora, verá que ya no está libre.'; msg.className = 'slotmsg'; pinta(); }
+    });
+    pinta(); box.appendChild(b);
+  });
+})();
+</script>
+</body>
+</html>

@@ -140,7 +140,11 @@ export default function Panel() {
             {!avisos.data?.recientes.length && <p className="text-[15px] text-muted">Cuando un técnico se ausente, sus visitas se reasignarán aquí, al instante.</p>}
             <ol className="space-y-3">
               {avisos.data?.recientes.slice(0, 5).map((a) => (
-                <li key={a.creado_en + a.visita_id} className="border-l-2 pl-3" style={{ borderColor: a.tipo === 'REASIGNADA' ? 'var(--color-good)' : 'var(--color-critical)' }}>
+                <li key={a.creado_en + a.visita_id} className="rounded-xl bg-surface/60 px-3.5 py-3 transition-colors hover:bg-surface">
+                  <p className={`mb-0.5 flex items-center gap-1.5 text-[12.5px] font-medium ${a.tipo === 'REASIGNADA' ? 'text-good' : 'text-critical'}`}>
+                    <span className={`size-1.5 rounded-full ${a.tipo === 'REASIGNADA' ? 'bg-good' : 'bg-critical'}`} aria-hidden="true" />
+                    {a.tipo === 'REASIGNADA' ? 'Reasignada' : 'Sin técnico'}
+                  </p>
                   <Link to={`/ordenes/${a.orden_id}`} className="block font-medium text-ink hover:underline">{a.cliente_nombre}</Link>
                   <p className="text-sm text-ink/85">{a.detalle}</p>
                   <p className="text-[13px] text-muted">{hace(a.creado_en)}</p>
@@ -158,7 +162,7 @@ export default function Panel() {
             <Anillo partes={[
               { etiqueta: 'Abiertas', valor: d.ordenes_abiertas, color: GRUPOS[0].color },
               { etiqueta: 'Cerradas', valor: d.ordenes_cerradas, color: GRUPOS[3].color },
-              { etiqueta: 'Canceladas', valor: d.ordenes_canceladas, color: '#8d8a80' },
+              { etiqueta: 'Canceladas', valor: d.ordenes_canceladas, color: 'var(--pin-neutral)' },
             ]} />
           ) : <Cargando />}
         </Tarjeta>

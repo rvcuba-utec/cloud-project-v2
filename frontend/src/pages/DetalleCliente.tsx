@@ -51,7 +51,7 @@ export default function DetalleCliente() {
       <MensajeError error={ubicaciones.error} />
       <ul className="mb-4 space-y-2">
         {ubicaciones.data?.items.map((u) => (
-          <li key={u.ubicacion_id} className="card m-nolift !flex-row flex-wrap items-center justify-between">
+          <li key={u.ubicacion_id} className="card !flex-row flex-wrap items-center justify-between">
             <span><strong className="font-medium">{u.nombre}</strong> · {u.direccion}, {u.distrito}{u.referencia ? ` (${u.referencia})` : ''}</span>
             {u.lat !== undefined ? <Insignia tono="bien">En el mapa</Insignia> : <Insignia tono="neutro">Sin punto en el mapa</Insignia>}
           </li>
