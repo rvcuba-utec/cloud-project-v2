@@ -47,13 +47,15 @@ Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el com
 
 ## Stages desplegados
 
-Solo está desplegado el stage `dev`, con esta versión (un solo API Gateway por ambiente) y el frontend actualizado. Los stages `test` y `prod` aún no están desplegados.
+Los tres ambientes están desplegados (22/11/2026) con esta versión: un solo API Gateway por ambiente, tablas, bucket, colas y web propios. Cada uno tiene la carga completa de datos (más de 30 000 registros de negocio por servicio). Los datos son los mismos en los tres, porque la semilla no depende del ambiente, pero cada ambiente los guarda en sus propias tablas y es independiente de los otros.
 
-| Stage | Estado | Web | API |
-|---|---|---|---|
-| `dev` | Desplegado (backend 19/11/2026, web 22/11/2026) | https://main.d2zgo6pqtrwczf.amplifyapp.com | https://h7az8rww6b.execute-api.us-east-1.amazonaws.com/dev |
-| `test` | Sin desplegar | — | — |
-| `prod` | Sin desplegar | — | — |
+| Stage | Web | API |
+|---|---|---|
+| `dev` | https://main.d2zgo6pqtrwczf.amplifyapp.com | https://h7az8rww6b.execute-api.us-east-1.amazonaws.com/dev |
+| `test` | https://main.dlbo1sbvowvke.amplifyapp.com | https://szciqmek93.execute-api.us-east-1.amazonaws.com/test |
+| `prod` | https://main.d3l65ifqp12a1w.amplifyapp.com | https://l900waylcd.execute-api.us-east-1.amazonaws.com/prod |
+
+Los conteos de cada ambiente están en `docs/evidencias/conteos-dev.md`, `conteos-test.md` y `conteos-prod.md`. `test` y `prod` exigen el secreto `trazora/<stage>/usuarios/password-pepper` en Secrets Manager antes de crear las cuentas de demo (ver `docs/SECRETS_MANAGER_ACADEMY.md`).
 
 Los siete microservicios comparten la URL de la API. Las URLs cambian si se destruye y se vuelve a desplegar el stage. Para otro stage, los comandos llevan `--stage`, por ejemplo `./warmup.sh --stage prod`.
 
