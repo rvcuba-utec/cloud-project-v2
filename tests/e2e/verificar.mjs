@@ -53,9 +53,19 @@ await c.getByRole('button', { name: 'Buscar' }).click();
 ok('Nueva orden: buscar vacío avisa', (await c.locator('form input').first().evaluate((i) => i.validationMessage)) === 'Completa este campo.');
 
 // Orden con visita: fechas y fecha pasada
-await c.goto(WEB + '/ordenes'); await c.locator('tbody tr').first().waitFor({ timeout: 30000 });
-await c.locator('tbody tr', { hasText: 'Recorrido navegador' }).first().getByRole('link').first().click();
-await c.waitForURL(/ordenes\/OT-/); await c.waitForTimeout(2500);
+// Se crea una orden propia y se le programa una visita lejana, para no depender de datos previos.
+await c.goto(WEB + '/ordenes/nueva');
+await c.locator('form input').first().fill('hotel'); await c.getByRole('button', { name: 'Buscar' }).click();
+await c.locator('form li button').first().click({ timeout: 30000 });
+const ub = c.getByLabel('Ubicación'); await ub.locator('option').nth(1).waitFor({ state: 'attached', timeout: 30000 });
+await ub.selectOption({ index: 1 });
+await c.getByLabel('Descripción del problema').fill(`Verificación ${Date.now()}`);
+await c.getByRole('button', { name: 'Crear orden' }).click(); await c.waitForURL(/\/ordenes\/OT-/, { timeout: 30000 });
+await c.getByRole('button', { name: 'Programar visita' }).click();
+const lejos = new Date(Date.now() + 16 * 86400000);
+await c.getByLabel('Fecha').fill(`${String(lejos.getDate()).padStart(2, '0')}/${String(lejos.getMonth() + 1).padStart(2, '0')}/${lejos.getFullYear()}`);
+await c.getByRole('button', { name: /Asignar al mejor técnico/ }).click({ timeout: 30000 });
+await c.getByText(/Visita 1/).first().waitFor({ timeout: 30000 }); await c.waitForTimeout(1500);
 ok('Orden: la visita muestra DD/MM/AAAA', /Visita 1 · \d{2}\/\d{2}\/\d{4}/.test(await T(c)), (await T(c)).match(/Visita 1 · \S+/)?.[0]);
 await c.getByRole('button', { name: 'Programar visita' }).click();
 await c.getByLabel('Fecha').fill('01/01/2020'); await c.waitForTimeout(800);
