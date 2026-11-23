@@ -2,10 +2,11 @@
 // Uso: node recorrido.mjs <url-web>   (lee las cuentas de .demo-credentials y no las imprime)
 import { chromium } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const WEB = process.argv[2];
 const STAGE = process.env.STAGE ?? 'dev';
-const RESULTADOS = new URL('./resultados/', import.meta.url).pathname;
+const RESULTADOS = fileURLToPath(new URL('./resultados/', import.meta.url));
 mkdirSync(RESULTADOS, { recursive: true });
 const cuentas = readFileSync(new URL('../../.demo-credentials', import.meta.url), 'utf8')
   .split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(/\s+/));
@@ -70,12 +71,12 @@ try {
 
   await coord.getByRole('button', { name: 'Programar visita' }).click();
   const fecha = new Date(Date.now() + 12 * 86400000 - 5 * 3600000).toISOString().slice(0, 10);
-  await coord.getByLabel('Fecha').fill(fecha);
+  await coord.getByLabel('Fecha').fill(fecha.split('-').reverse().join('/')); // el campo usa DD/MM/AAAA
   const fila = coord.locator('li', { hasText: 'Carlos Villanueva' }).first();
   await fila.waitFor({ timeout: 30000 });
   await fila.locator('button').last().click();
   await coord.getByText(/Visita 1/).first().waitFor({ timeout: 30000 });
-  await coord.getByText('Programada', { exact: true }).first().waitFor({ timeout: 30000 });
+  await coord.getByText(/· Programada/).first().waitFor({ timeout: 30000 });
   await foto(coord, '2-orden-programada');
   paso('Programa la visita con el técnico sugerido o elegido');
 
@@ -86,6 +87,8 @@ try {
   await visita.first().waitFor({ timeout: 30000 });
   await sinDesborde(tec, 'mis-visitas');
   await visita.first().getByRole('button', { name: 'Iniciar visita' }).click();
+  // La visita es de otra fecha: la app pide confirmar el inicio anticipado.
+  await tec.locator('dialog[open]').getByRole('button', { name: 'Iniciar de todos modos' }).click({ timeout: 5000 }).catch(() => {});
   await tec.waitForURL(/\/mis-visitas\/VIS-/);
   await tec.getByLabel('Diagnóstico').waitFor({ timeout: 30000 });
   paso('Técnico, en teléfono, inicia la visita');

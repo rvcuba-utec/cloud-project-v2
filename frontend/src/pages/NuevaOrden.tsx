@@ -43,7 +43,7 @@ export default function NuevaOrden() {
           <form onSubmit={(e: FormEvent) => { e.preventDefault(); setBusqueda(texto.trim()); }}>
             <Campo etiqueta="Buscar cliente por inicio del nombre">
               <div className="flex gap-2">
-                <input className={CAMPO} value={texto} onChange={(e) => setTexto(e.target.value)} />
+                <input className={CAMPO} required value={texto} onChange={(e) => setTexto(e.target.value)} />
                 <Boton type="submit" variante="secundario" className="mt-1">Buscar</Boton>
               </div>
             </Campo>

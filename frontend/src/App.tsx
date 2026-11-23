@@ -27,6 +27,7 @@ export default function App() {
           <Route element={<RutaPorRol roles={['ADMIN', 'COORDINADOR']} />}>
             <Route path="panel" element={<Panel />} />
             <Route path="clientes" element={<Clientes />} />
+            <Route path="clientes/nuevo" element={<Navigate to="/clientes" replace />} />
             <Route path="clientes/:id" element={<DetalleCliente />} />
             <Route path="tecnicos" element={<Tecnicos />} />
             <Route path="tecnicos/:id" element={<DetalleTecnico />} />

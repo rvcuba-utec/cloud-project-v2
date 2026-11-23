@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import { agenda, ordenes, partes, type Prioridad } from '../api/recursos';
 import { ESPECIALIDADES, ESTADOS_ORDEN, ESTADOS_VISITA, PRIORIDADES, RESULTADOS, fechaHora, horaLima } from '../components/formato';
+import { fechaDMA } from '../components/fecha';
 import ProgramarVisita from '../components/ProgramarVisita';
 import { Boton, CAMPO, Campo, Cargando, Confirmacion, Encabezado, Insignia, MensajeError, Tarjeta, type Tono } from '../components/ui';
 import { grupoDe } from '../components/MapaOrdenes';
@@ -111,7 +112,7 @@ export default function DetalleOrden() {
       <ul className="space-y-2">
         {visitas.data?.items.map((v) => (
           <li key={v.visita_id} className="rounded-md border border-line bg-card p-3 text-sm">
-            <strong>Visita {v.numero_visita_orden}</strong> · {v.fecha} {horaLima(v.inicio)}–{horaLima(v.fin)} · {v.tecnico_nombre} · {ESTADOS_VISITA[v.estado]}
+            <strong>Visita {v.numero_visita_orden}</strong> · {fechaDMA(v.fecha)} {horaLima(v.inicio)}–{horaLima(v.fin)} · {v.tecnico_nombre} · {ESTADOS_VISITA[v.estado]}
           </li>
         ))}
         {visitas.data?.items.length === 0 && <li className="text-sm text-muted">Aún no hay visitas.</li>}
@@ -137,7 +138,7 @@ export default function DetalleOrden() {
           <>
             <p>Se cancelarán también <strong>{programadas.length === 1 ? 'esta visita programada' : `estas ${programadas.length} visitas programadas`}</strong>, y sus horarios quedarán libres:</p>
             <ul className="space-y-1 rounded-xl bg-surface/60 p-3 text-[15px]">
-              {programadas.map((v) => <li key={v.visita_id}>Visita {v.numero_visita_orden}: {v.fecha}, {horaLima(v.inicio)} con {v.tecnico_nombre}</li>)}
+              {programadas.map((v) => <li key={v.visita_id}>Visita {v.numero_visita_orden}: {fechaDMA(v.fecha)}, {horaLima(v.inicio)} con {v.tecnico_nombre}</li>)}
             </ul>
           </>
         ) : <p>La orden no tiene visitas programadas.</p>}

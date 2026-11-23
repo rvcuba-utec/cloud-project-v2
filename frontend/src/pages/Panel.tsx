@@ -83,6 +83,10 @@ function Alertas({ pendientes, onReprogramar }: { pendientes: Alerta[]; onReprog
 export default function Panel() {
   const hoy = hoyLima();
   const [periodo, setPeriodo] = useState(hoy.slice(0, 7));
+  const meses = useMemo(() => Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1 - i, 1));
+    return { valor: d.toISOString().slice(0, 7), texto: d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+  }), [hoy]);
   const [reprogramando, setReprogramando] = useState<Alerta | null>(null);
   const avisos = useQuery({ queryKey: ['alertas'], queryFn: alertas.listar, refetchInterval: 15_000 });
   const puntos = useQuery({ queryKey: ['mapa'], queryFn: mapa.ordenes, refetchInterval: 30_000 });
@@ -112,7 +116,9 @@ export default function Panel() {
     <>
       <Encabezado titulo="Panel" subtitulo={<>Lo que pasa hoy en tus órdenes, visitas y técnicos. {fechaLarga(hoy)}.</>}>
         <label className="text-sm font-medium text-ink">Mes del resumen
-          <input className={`${CAMPO} !mt-1 w-44`} type="month" value={periodo} max={hoy.slice(0, 7)} onChange={(e) => setPeriodo(e.target.value)} />
+          <select className={`${CAMPO} !mt-1 w-52 capitalize`} value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+            {meses.map((m) => <option key={m.valor} value={m.valor}>{m.texto}</option>)}
+          </select>
         </label>
       </Encabezado>
 
@@ -155,7 +161,7 @@ export default function Panel() {
         </div>
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-[400px_1fr]">
+      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[400px_1fr]">
         <Tarjeta titulo="Órdenes del mes">
           <MensajeError error={mes.error} />
           {d ? (
@@ -187,6 +193,7 @@ export default function Panel() {
             </table>
             {rendimiento.isLoading && <Cargando />}
           </div>
+          {filas.length > 6 && <p className="mt-2 text-[13px] text-muted">Mostrando {filas.length} técnicos: desplázate dentro de la tabla para verlos todos.</p>}
         </Tarjeta>
       </div>
 

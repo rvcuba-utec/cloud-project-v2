@@ -226,7 +226,7 @@ export default function Agenda() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="font-display text-2xl mayuscula-inicial">{vista === 'dia' ? fechaLarga(fecha) : 'Agenda semanal'}</p>
         <div className="flex flex-wrap items-center gap-3">
-          <select aria-label="Especialidad" className={`${CAMPO} !mt-0 !w-52`} value={especialidad} onChange={(e) => setEspecialidad(e.target.value as Especialidad | '')}>
+          <select aria-label="Especialidad" className={`${CAMPO} !mt-0 !w-64 max-w-full`} value={especialidad} onChange={(e) => setEspecialidad(e.target.value as Especialidad | '')}>
             <option value="">Todas las especialidades</option>
             {Object.entries(ESPECIALIDADES).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
           </select>

@@ -19,7 +19,7 @@ function FormularioCliente({ onCancelar }: { onCancelar: () => void }) {
     <Tarjeta className="mb-4">
       <form onSubmit={(e: FormEvent) => { e.preventDefault(); crear.mutate(); }} className="grid gap-3 md:grid-cols-3">
         <Campo etiqueta="Nombre"><input className={CAMPO} required value={nombre} onChange={(e) => { setNombre(e.target.value); idempotencia.renovar(); }} /></Campo>
-        <Campo etiqueta="Teléfono"><input className={CAMPO} value={telefono} onChange={(e) => { setTelefono(e.target.value); idempotencia.renovar(); }} /></Campo>
+        <Campo etiqueta="Teléfono"><input className={CAMPO} type="tel" inputMode="tel" autoComplete="tel" pattern="[\d\s+\-\(\)]{6,20}" title="Solo números, espacios, +, - y paréntesis (6 a 20 caracteres)" value={telefono} onChange={(e) => { setTelefono(e.target.value); idempotencia.renovar(); }} /></Campo>
         <Campo etiqueta="Correo"><input className={CAMPO} type="email" value={correo} onChange={(e) => { setCorreo(e.target.value); idempotencia.renovar(); }} /></Campo>
         <div className="flex gap-2 md:col-span-3">
           <Boton type="submit" disabled={crear.isPending}>{crear.isPending ? 'Guardando…' : 'Guardar'}</Boton>

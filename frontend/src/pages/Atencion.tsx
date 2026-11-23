@@ -6,6 +6,7 @@ import { problemaDeArchivo, subirEvidencia } from '../api/evidencias';
 import { agenda, partes, type CambiosParte, type Parte, type ResultadoParte } from '../api/recursos';
 import { ESTADOS_VISITA, RESULTADOS, horaLima } from '../components/formato';
 import { Boton, CAMPO, Campo, Confirmacion, Encabezado, Insignia, MensajeError, Tarjeta } from '../components/ui';
+import { fechaDMA } from '../components/fecha';
 import { ResumenParte } from './DetalleParte';
 
 const MAX_ESPERA_MS = 30_000;
@@ -31,6 +32,7 @@ function FormularioParte({ parte, visitaId }: { parte: Parte; visitaId: string }
   const [aviso, setAviso] = useState('');
   const [problemaFoto, setProblemaFoto] = useState('');
   const [confirmando, setConfirmando] = useState(false);
+  const [faltan, setFaltan] = useState('');
 
   const cambios = (): CambiosParte => ({ diagnostico, tareas: lineas(tareas), materiales: lineas(materiales), resultado });
   const conflicto = (e: unknown) => {
@@ -69,8 +71,26 @@ function FormularioParte({ parte, visitaId }: { parte: Parte; visitaId: string }
     if (!problema) subir.mutate(archivo);
   };
 
+  const pedirFinalizar = () => {
+    const falta = [
+      !diagnostico.trim() && 'el diagnóstico',
+      lineas(tareas).length === 0 && 'las tareas realizadas',
+      !resultado && 'el resultado',
+    ].filter(Boolean);
+    if (falta.length) { setFaltan(`Antes de finalizar completa ${falta.join(', ')}.`); return; }
+    setFaltan('');
+    setConfirmando(true);
+  };
+
   const fotos = parte.evidencias ?? [];
   const ocupado = guardar.isPending || finalizar.isPending;
+  const sucio = diagnostico !== parte.diagnostico || tareas !== parte.tareas.join('\n') || materiales !== parte.materiales.join('\n') || resultado !== parte.resultado;
+  useEffect(() => {
+    if (!sucio) return;
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [sucio]);
 
   return (
     <div className="space-y-4">
@@ -118,10 +138,12 @@ function FormularioParte({ parte, visitaId }: { parte: Parte; visitaId: string }
 
       <MensajeError error={guardar.error} />
       <MensajeError error={finalizar.error} />
-      {aviso && !guardar.isPending && <p role="status" className="text-sm text-muted">{aviso}</p>}
+      {faltan && <p role="alert" className="text-sm text-critical">{faltan}</p>}
+      {sucio && !guardar.isPending && <p role="status" className="text-sm text-warning">Tienes cambios sin guardar. Usa «Guardar borrador» para no perderlos.</p>}
+      {aviso && !sucio && !guardar.isPending && <p role="status" className="text-sm text-muted">{aviso}</p>}
       <div className="flex flex-col gap-2 md:flex-row">
         <Boton variante="secundario" disabled={ocupado} onClick={() => guardar.mutate()}>{guardar.isPending ? 'Guardando…' : 'Guardar borrador'}</Boton>
-        <Boton flecha disabled={ocupado || subir.isPending} onClick={() => setConfirmando(true)}>
+        <Boton flecha disabled={ocupado || subir.isPending} onClick={pedirFinalizar}>
           {finalizar.isPending ? 'Finalizando…' : 'Finalizar parte'}
         </Boton>
       </div>
@@ -165,7 +187,7 @@ export default function Atencion() {
         <Insignia tono={v.estado === 'FINALIZADA' ? 'bien' : v.estado === 'EN_ATENCION' ? 'info' : 'aviso'} vivo={v.estado === 'EN_ATENCION'}>{ESTADOS_VISITA[v.estado]}</Insignia>
       </Encabezado>
       <p className="text-sm text-ink">{v.direccion}, {v.distrito}</p>
-      <p className="mb-4 text-sm text-muted">{v.fecha} · {horaLima(v.inicio)}–{horaLima(v.fin)} · {v.orden_descripcion}</p>
+      <p className="mb-4 text-sm text-muted">{fechaDMA(v.fecha)} · {horaLima(v.inicio)}–{horaLima(v.fin)} · {v.orden_descripcion}</p>
       <MensajeError error={parte.error} />
       {parte.data && !finalizado && <FormularioParte key={parte.data.parte_id} parte={parte.data} visitaId={id} />}
       {parte.data && finalizado && (

@@ -12,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [verClave, setVerClave] = useState(false);
 
   if (usuario) return <Navigate to="/" replace />;
 
@@ -74,8 +75,14 @@ export default function Login() {
             </label>
             <label className="block text-sm font-medium text-ink">
               Contraseña
-              <input className={CAMPO} required type="password" value={password} autoComplete="current-password"
-                onChange={(e) => setPassword(e.target.value)} />
+              <span className="relative block">
+                <input className={`${CAMPO} pr-24`} required type={verClave ? 'text' : 'password'} value={password} autoComplete="current-password"
+                  onChange={(e) => setPassword(e.target.value)} />
+                <button type="button" aria-pressed={verClave} onClick={() => setVerClave((v) => !v)}
+                  className="absolute inset-y-0 right-0 mt-1 flex h-11 items-center px-3 text-sm font-medium text-accent hover:underline">
+                  {verClave ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </span>
             </label>
             <button type="submit" disabled={enviando} className="btn btn--primary w-full disabled:opacity-60">
               {enviando ? 'Entrando…' : 'Iniciar sesión'}

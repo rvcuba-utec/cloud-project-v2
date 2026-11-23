@@ -17,6 +17,10 @@ export default function InputFecha({ value, onChange, min, className = 'mt-1', r
   const calendario = useRef<HTMLInputElement>(null);
   useEffect(() => setTexto(fechaDMA(value)), [value]);
 
+  // Con la fecha completa pero inválida o anterior al mínimo, se explica en vez de ignorarla en silencio.
+  const iso = fechaISO(texto);
+  const problema = texto.length < 10 ? '' : !iso ? 'Esa fecha no existe.' : min && iso < min ? `Elige ${fechaDMA(min)} o una fecha posterior.` : '';
+
   const aceptar = (fecha: string) => { if (fecha && (!min || fecha >= min)) onChange(fecha); };
   const abrir = () => {
     try { calendario.current?.showPicker?.(); } catch { /* sin gesto del usuario no se abre */ }
@@ -25,7 +29,7 @@ export default function InputFecha({ value, onChange, min, className = 'mt-1', r
   return (
     <span className={`relative block ${className}`}>
       <input type="text" inputMode="numeric" autoComplete="off" placeholder="dd/mm/aaaa" maxLength={10}
-        className={CAMPO_FECHA} required={required} aria-label={etiqueta}
+        className={CAMPO_FECHA} required={required} aria-label={etiqueta} aria-invalid={Boolean(problema)}
         value={texto}
         onChange={(e) => { const t = mascaraFecha(e.target.value); setTexto(t); aceptar(fechaISO(t)); }}
         onBlur={() => setTexto(fechaDMA(value))} />
@@ -35,6 +39,7 @@ export default function InputFecha({ value, onChange, min, className = 'mt-1', r
           <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
         </svg>
       </button>
+      {problema && <span role="alert" className="mt-1 block text-sm text-critical">{problema}</span>}
       <input ref={calendario} type="date" tabIndex={-1} aria-hidden="true" min={min} value={value}
         onChange={(e) => aceptar(e.target.value)}
         className="pointer-events-none absolute bottom-0 right-0 size-0 opacity-0" />

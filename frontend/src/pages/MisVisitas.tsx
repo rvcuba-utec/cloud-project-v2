@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agenda, tecnicos, todas, type Visita } from '../api/recursos';
 import { useAuth } from '../auth/AuthContext';
 import { ESPECIALIDADES, ESTADOS_VISITA, fechaLarga, horaLima, hoyLima, sumarDias } from '../components/formato';
+import { fechaDMA } from '../components/fecha';
 import { AREA, Boton, Campo, Cargando, Confirmacion, Encabezado, Insignia, MensajeError, type Tono } from '../components/ui';
 
 const TONO: Record<string, Tono> = { PROGRAMADA: 'aviso', EN_ATENCION: 'info', FINALIZADA: 'bien', CANCELADA: 'neutro' };
@@ -38,6 +39,7 @@ export default function MisVisitas() {
   const [ausencia, setAusencia] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [verTerminadas, setVerTerminadas] = useState(false);
+  const [anticipada, setAnticipada] = useState<Visita | null>(null);
   const { data, error, isLoading } = useQuery({
     queryKey: ['mis-visitas', hoy],
     queryFn: () => todas((cursor) => agenda.listar({ desde: hoy, cursor, limit: 100 }), 3),
@@ -111,13 +113,18 @@ export default function MisVisitas() {
               <div key={dia}>
                 <p className="mb-2 text-[15px] font-medium mayuscula-inicial text-muted">{fechaLarga(dia)}</p>
                 <ul className="grid gap-3 md:grid-cols-2">
-                  {lista.map((v) => <TarjetaVisita key={v.visita_id} v={v} iniciando={iniciar.isPending} onIniciar={() => iniciar.mutate(v.visita_id)} />)}
+                  {lista.map((v) => <TarjetaVisita key={v.visita_id} v={v} iniciando={iniciar.isPending} onIniciar={() => setAnticipada(v)} />)}
                 </ul>
               </div>
             ))}
           </div>
         </section>
       )}
+
+      <Confirmacion abierta={Boolean(anticipada)} titulo="Esta visita no es de hoy" confirmar="Iniciar de todos modos" ocupado={iniciar.isPending}
+        onCancelar={() => setAnticipada(null)} onConfirmar={() => { if (anticipada) iniciar.mutate(anticipada.visita_id); setAnticipada(null); }}>
+        <p>Está programada para el {anticipada ? fechaDMA(anticipada.fecha) : ''}. Si la inicias ahora, quedará en atención desde hoy. ¿Quieres iniciarla de todos modos?</p>
+      </Confirmacion>
 
       <Confirmacion abierta={ausencia} peligro titulo="No puedes trabajar hoy" confirmar="Avisar a coordinación" ocupado={reportar.isPending}
         onCancelar={() => setAusencia(false)} onConfirmar={() => reportar.mutate()}>

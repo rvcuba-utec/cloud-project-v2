@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { partes, type Parte } from '../api/recursos';
 import { useAuth } from '../auth/AuthContext';
 import { RESULTADOS, fechaHora } from '../components/formato';
+import { fechaDMA } from '../components/fecha';
 import { Encabezado, MensajeError, Tarjeta } from '../components/ui';
 
 export function ResumenParte({ parte }: { parte: Parte }) {
@@ -48,7 +49,7 @@ export default function DetalleParte() {
     <>
       <p className="mb-2 text-sm"><Link className="text-accent underline" to={volver}>← Volver</Link></p>
       <Encabezado titulo={`Parte de la visita ${parte.numero_visita_orden}`} />
-      <p className="mb-3 text-sm text-muted">{parte.cliente_nombre} · {parte.direccion}, {parte.distrito} · {parte.fecha} · {parte.tecnico_nombre}</p>
+      <p className="mb-3 text-sm text-muted">{parte.cliente_nombre} · {parte.direccion}, {parte.distrito} · {fechaDMA(parte.fecha)} · {parte.tecnico_nombre}</p>
       <ResumenParte parte={parte} />
     </>
   );

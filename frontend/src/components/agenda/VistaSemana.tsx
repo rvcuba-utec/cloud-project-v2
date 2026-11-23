@@ -110,7 +110,7 @@ export default function VistaSemana({
       <MensajeError error={semana.error ?? visitas.error} />
       {semana.isLoading || visitas.isLoading ? <Cargando /> : (
         <div data-scroll-agenda className="overflow-x-auto rounded-2xl border border-line bg-card">
-          <div className="flex min-w-[920px]">
+          <div className="flex min-w-[780px]">
             <div className="sticky left-0 z-10 bg-ground/95 pt-[72px]"><Horas /></div>
             {dias.map((dia) => {
               const ausente = ausencias.get(dia);
@@ -121,7 +121,7 @@ export default function VistaSemana({
               const destinoDia: DestinoVisual | undefined =
                 destino && destino.tecnico_id === idActivo && destino.fecha === dia ? destino : undefined;
               return (
-                <div key={dia} className="min-w-[122px] flex-1">
+                <div key={dia} className="min-w-[108px] flex-1">
                   <div className={`sticky top-0 flex h-[72px] flex-col justify-center border-b border-l border-line px-2 ${ausente ? 'bg-critical-soft' : dia === hoy ? 'bg-accent-soft' : 'bg-card'} ${pasado ? 'opacity-70' : ''}`}>
                     <p className={`text-[14px] font-medium mayuscula-inicial ${ausente ? 'text-critical' : ''}`}>
                       {fechaCorta(dia)}{dia === hoy && ' · hoy'}
