@@ -45,11 +45,11 @@ SaaS multitenant de gestión de servicios en campo (*field service management*),
 
 Si caducan las credenciales, pega las nuevas en el mismo archivo y repite el comando.
 
-## Stages desplegados
+## Ambientes desplegados y acceso
 
 Los tres ambientes están desplegados (22/11/2026) con esta versión: un solo API Gateway por ambiente, tablas, bucket, colas y web propios. Cada uno tiene la carga completa de datos (más de 30 000 registros de negocio por servicio). Los datos son los mismos en los tres, porque la semilla no depende del ambiente, pero cada ambiente los guarda en sus propias tablas y es independiente de los otros.
 
-| Stage | Web | API |
+| Ambiente | Web (Amplify) | API |
 |---|---|---|
 | `dev` | https://main.d2zgo6pqtrwczf.amplifyapp.com | https://h7az8rww6b.execute-api.us-east-1.amazonaws.com/dev |
 | `test` | https://main.dlbo1sbvowvke.amplifyapp.com | https://szciqmek93.execute-api.us-east-1.amazonaws.com/test |
@@ -61,15 +61,53 @@ Los siete microservicios comparten la URL de la API. Las URLs cambian si se dest
 
 ## Cuentas de demo
 
-`./deploy.sh` (objetivo `todo`) crea 9 cuentas con `scripts/seed/bootstrap_admins.py`, tres por empresa, y guarda las contraseñas en `.demo-credentials`, en la raíz del proyecto y fuera de Git. Ese archivo tiene las credenciales válidas del stage desplegado: una por línea, con stage, empresa, correo, contraseña y rol.
+Para entrar a la web de cada ambiente, en el login se escribe el **código de empresa**, el correo y la contraseña. Hay tres empresas (CLIMALIMA, FRIOSUR, TECNINORTE) y cada una tiene tres roles: `ADMIN` (usuarios), `COORDINADOR` (órdenes, clientes, agenda, panel) y `TECNICO` (Mi día, visitas y partes, pensado para celular). Cada empresa solo ve sus propios datos. Las contraseñas son distintas en cada ambiente.
 
-| Empresa | Correos | Roles |
-|---|---|---|
-| CLIMALIMA | `admin@`, `coordinador@`, `tecnico@climalima.example.com` | ADMIN, COORDINADOR, TECNICO |
-| FRIOSUR | `admin@`, `coordinador@`, `tecnico@friosur.example.com` | ADMIN, COORDINADOR, TECNICO |
-| TECNINORTE | `admin@`, `coordinador@`, `tecnico@tecninorte.example.com` | ADMIN, COORDINADOR, TECNICO |
+Cuentas sugeridas para una revisión rápida: el coordinador de CLIMALIMA para el flujo completo y el técnico de CLIMALIMA para la atención de visitas.
 
-Las contraseñas se generan al desplegar y cambian si se vuelve a crear el stage. Si falta el archivo, ejecuta `python3 scripts/seed/bootstrap_admins.py --stage dev`.
+### dev: https://main.d2zgo6pqtrwczf.amplifyapp.com
+
+| Empresa (código) | Rol | Correo | Contraseña |
+|---|---|---|---|
+| CLIMALIMA | ADMIN | `admin@climalima.example.com` | `ig5Iu0oQyZNtB1itSzWe` |
+| CLIMALIMA | COORDINADOR | `coordinador@climalima.example.com` | `gN0mZfajnsZ55NbG4Yt2` |
+| CLIMALIMA | TECNICO | `tecnico@climalima.example.com` | `GWqrmXhSjDVu_N0qEyJA` |
+| FRIOSUR | ADMIN | `admin@friosur.example.com` | `rOSonZzsDKKe-UiQs6f7` |
+| FRIOSUR | COORDINADOR | `coordinador@friosur.example.com` | `JDSLIXk41rmNkDImeOQw` |
+| FRIOSUR | TECNICO | `tecnico@friosur.example.com` | `PWF3aUANz7NMa7vdvbRV` |
+| TECNINORTE | ADMIN | `admin@tecninorte.example.com` | `mwIH3jPGP9OKMmqVBBI7` |
+| TECNINORTE | COORDINADOR | `coordinador@tecninorte.example.com` | `jkgXi9iflWAu9iDsKIJV` |
+| TECNINORTE | TECNICO | `tecnico@tecninorte.example.com` | `2iTFKSy3AreoT45ZHeTi` |
+
+### test: https://main.dlbo1sbvowvke.amplifyapp.com
+
+| Empresa (código) | Rol | Correo | Contraseña |
+|---|---|---|---|
+| CLIMALIMA | ADMIN | `admin@climalima.example.com` | `WPMRqjVJ02JZr78Rq6kM` |
+| CLIMALIMA | COORDINADOR | `coordinador@climalima.example.com` | `HuO5d_kY8oad2sSc6Xgw` |
+| CLIMALIMA | TECNICO | `tecnico@climalima.example.com` | `7bSh9MP8eX8bKp6qKUa8` |
+| FRIOSUR | ADMIN | `admin@friosur.example.com` | `WFJt35TbMqDHrh62zPFx` |
+| FRIOSUR | COORDINADOR | `coordinador@friosur.example.com` | `Co3rXAG62b1mX--9V_Id` |
+| FRIOSUR | TECNICO | `tecnico@friosur.example.com` | `l1WFYGg9L7czus51Ui_z` |
+| TECNINORTE | ADMIN | `admin@tecninorte.example.com` | `5ejv1T8_ynpQJzvN00Sb` |
+| TECNINORTE | COORDINADOR | `coordinador@tecninorte.example.com` | `JKlxWmHBF7dOAc9lHppG` |
+| TECNINORTE | TECNICO | `tecnico@tecninorte.example.com` | `1bCNleU39ASEVPBqbz0g` |
+
+### prod: https://main.d3l65ifqp12a1w.amplifyapp.com
+
+| Empresa (código) | Rol | Correo | Contraseña |
+|---|---|---|---|
+| CLIMALIMA | ADMIN | `admin@climalima.example.com` | `xqku2ikMHqSlE7mygrNI` |
+| CLIMALIMA | COORDINADOR | `coordinador@climalima.example.com` | `Qj6XJwWLxLGYmr15cBiJ` |
+| CLIMALIMA | TECNICO | `tecnico@climalima.example.com` | `hFSP_ybUyDaQ-DjKoL-U` |
+| FRIOSUR | ADMIN | `admin@friosur.example.com` | `m8Y_HqCI851S5Wjtz1xw` |
+| FRIOSUR | COORDINADOR | `coordinador@friosur.example.com` | `hRQGaq_QUIJcJ6IxN_MK` |
+| FRIOSUR | TECNICO | `tecnico@friosur.example.com` | `QmTs9vd2gnY8RgrPylER` |
+| TECNINORTE | ADMIN | `admin@tecninorte.example.com` | `h0Vi-Jd3O4e6unDxP_1x` |
+| TECNINORTE | COORDINADOR | `coordinador@tecninorte.example.com` | `bVXt0GTJRGeDp3j_sC4p` |
+| TECNINORTE | TECNICO | `tecnico@tecninorte.example.com` | `2jtalaedHFX_XNe5BWXX` |
+
+`./deploy.sh` crea estas cuentas con `scripts/seed/bootstrap_admins.py` y las guarda también en `.demo-credentials` (fuera de Git). Cambian si se vuelve a crear el stage; para regenerarlas: `python3 scripts/seed/bootstrap_admins.py --stage <stage>`.
 
 ## Pruebas
 
